@@ -59,7 +59,7 @@ utility_check() {
 	echo "${BIN}"
 }
 
-# assuming echo and cat exist
+# assuming echo and cat and cut exist
 CURL_BIN=`utility_check curl`
 XMLLINT_BIN=`utility_check xmllint`
 JQ_BIN=`utility_check jq`
@@ -212,10 +212,10 @@ let i=1
 while [ $i -le ${COUNT} ]; do
 
 	# store the single entity descriptor in a temporary XML file
-exec_xmllint ${TMP1} "cat /md:EntitiesDescriptor/md:EntityDescriptor[$i]" | ${SED_BIN} "1,1d; $ d" > ${TMP2}
+	exec_xmllint ${TMP1} "cat /md:EntitiesDescriptor/md:EntityDescriptor[$i]" | ${SED_BIN} "1,1d; $ d" > ${TMP2}
 
 	# grab the entityId	
-	ENTITY=`exec_xmllint ${TMP2} "cat /md:EntityDescriptor/@entityID" "entityID" | cut -d"=" -f2 | tr -d "\""`	
+	ENTITY=`exec_xmllint ${TMP2} "dir /md:EntityDescriptor/@entityID" "content" | cut -d"=" -f2`	
 
 	# print out which entity we are processing
 	printf "[$i] : processing [${ENTITY}] ..."
