@@ -105,7 +105,8 @@ if [[ -z ${TEMPLATE} && ${ACTION} == "create" ]] ; then
 	print_usage "action \"${ACTION}\" requires the option \"-t <template-connection-entity-id>\""
 fi
 
-${CURL_BIN} ${CURL_OPTS} ${MDURL} -o ${TMP1}
+echo " # INFO: retrieving metadata file"
+${CURL_BIN} -# ${MDURL} -o ${TMP1}
 if [[ $? -ne 0 ]] ; then
 	echo " # ERROR: could not retrieve metadata file from URL: $1!"
 	exit 1
@@ -118,7 +119,13 @@ if [[ -n ${CERT} ]] ; then
 	else
 		echo " # ERROR: signature verification on the metadata file failed!"
 		exit 1
-	fi	
+	fi
+else
+	echo " #"
+	echo " # WARNING: No certificate was provided so signature(s) on the metadata will not be verified!"
+	echo " # WARNING: Use the -c option to provide a verification certificate, otherwise you must ensure"
+	echo " # WARNING: that you've verified the source of the metadata in some other way!"
+	echo " #"
 fi
 
 # execute an xmllint command, optionally filtered
