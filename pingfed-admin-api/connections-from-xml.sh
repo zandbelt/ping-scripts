@@ -94,7 +94,7 @@ shift $((OPTIND-1))
 
 if [ $# -lt 2 ] ; then print_usage; fi
 
-MDURL=$1
+METADATA_URL=$1
 
 ACTION=$2
 if [[ ${ACTION} != "create" && ${ACTION} != "delete" ]] ; then
@@ -106,12 +106,13 @@ if [[ -z ${TEMPLATE} && ${ACTION} == "create" ]] ; then
 fi
 
 echo " # INFO: retrieving metadata file"
-${CURL_BIN} -# ${MDURL} -o ${TMP1}
+${CURL_BIN} -# ${METADATA_URL} -o ${TMP1}
 if [[ $? -ne 0 ]] ; then
 	echo " # ERROR: could not retrieve metadata file from URL: $1!"
 	exit 1
 fi
 
+# see if we need to verify the signature on the XML file because a certificate was provided
 if [[ -n ${CERT} ]] ; then
 	XMLSEC=`utility_check xmlsec1`
 	if "${XMLSEC}" verify --id-attr:ID "urn:oasis:names:tc:SAML:2.0:metadata:EntitiesDescriptor" --pubkey-cert-pem ${CERT} ${TMP1} 2>/dev/null ; then
@@ -141,7 +142,7 @@ exec_xmllint() {
 }
 
 # create a JSON request object for the connectionMetadata/convert endpoint
-make_json() {
+create_convert_json() {
 	local TYPE=$1
 	local PROTO=$2
 	local B64XML=$3
@@ -189,9 +190,65 @@ api_request() {
 	echo "${RESPONSE}"
 }
 
-# get the list of all connections
+# create a connection from an EntityDescriptor in an XML file using the Admin REST API
+conn_idp_create() {
+	local FILE=$1
+	
+	# base64encode the entity descriptor XML
+	B64XML=`cat ${FILE} | ${OPENSSL_BIN} base64 -a -A`
+				
+	# assemble a request to convert XML to JSON and send it over the Admin API
+	REQ=`create_convert_json "IDP" "SAML20" "${B64XML}"`
+	RESPONSE=`api_request connectionMetadata/convert POST "${REQ}"` || exit
+
+	# assemble a connection create request 
+	REQ=`echo "{ \"conn\": ${RESPONSE}, \"contract\": ${CONTRACT} }" | ${JQ_BIN} '.conn.connection.idpBrowserSso.attributeContract=.contract | .conn.connection | .name="[P] "+ .entityId | del(.credentials.signingSettings)'`
+					
+	# send the request over the Admin API
+	# NB: do not exit if creation/validation fails
+	RESPONSE=`api_request sp/idpConnections POST "${REQ}"`
+
+	printf "OK\n"
+}
+	
+conn_idp_delete() {
+	local ENTITYID=$1
+	
+	# find the connection by its entityId in the list of all connections
+	CONN=`echo "${ALL_CONNS}" | ${JQ_BIN} --arg entity ${ENTITYID} '.items[] | select(.entityId==$entity)'`
+					
+	# see if we have a match
+	if [ -z "${CONN}" ] ; then
+		echo " [SKIP]\n"
+		return
+	fi
+		
+	# assemble and send a connection deactivation request over the Admin API
+	ID=`echo "${CONN}" | ${JQ_BIN} -r '.id'`
+	CONN=`echo "${CONN}" | ${JQ_BIN} '.active=false'`						
+	RESPONSE=`api_request sp/idpConnections/${ID} PUT "${CONN}"` || exit
+						
+	# next send a connection delete request over the Admin API
+	# NB: do not exit on suspicious responses
+	RESPONSE=`api_request sp/idpConnections/${ID} "DELETE"`
+
+	# should return HTTP 204 with an empty response, check that
+	if [ -n "${RESPONSE}" ] ; then
+		printf "ERROR\n"
+		echo ${RESPONSE}
+		exit
+	fi
+
+	printf " OK\n"
+}
+
+# count the number of EntityDescriptors
+COUNT=`exec_xmllint "${TMP1}" "dir /md:EntitiesDescriptor/md:EntityDescriptor" "ELEMENT EntityDescriptor" | wc -l`
+
+# get the list of all current connections from PingFederate
 ALL_CONNS=`api_request sp/idpConnections` || exit
 
+# see if we need to obtain info about a template connection
 if [[ $ACTION == "create" ]] ; then
 	# find the template connection
 	TEMPLATE_CONN=`echo "${ALL_CONNS}" | ${JQ_BIN} --arg entity ${TEMPLATE} '.items[] | select(.entityId==$entity)'`
@@ -199,15 +256,11 @@ if [[ $ACTION == "create" ]] ; then
 		echo "ERROR: template connection \"${TEMPLATE}\" not found"
 		exit
 	fi
+	# extract the attribute contract from the template connection (workaround because it gets lost??)
+	CONTRACT=`echo ${TEMPLATE_CONN} | ${JQ_BIN} '.idpBrowserSso.attributeContract'`
 fi
 
-# extract the attribute contract from the template connection (workaround because it gets lost??)
-CONTRACT=`echo ${TEMPLATE_CONN} | ${JQ_BIN} '.idpBrowserSso.attributeContract'`
-
-# count the number of EntityDescriptors
-COUNT=`exec_xmllint "${TMP1}" "dir /md:EntitiesDescriptor/md:EntityDescriptor" "ELEMENT EntityDescriptor" | wc -l`
-
-# loop over the EntityDescriptors
+# loop over the EntityDescriptors inside the EntitiesDescriptor
 let i=1
 while [ $i -le ${COUNT} ]; do
 
@@ -227,53 +280,13 @@ while [ $i -le ${COUNT} ]; do
 
 		# check if it is a SAML 2.0 descriptor
 		if exec_xmllint ${TMP2} "cat /md:EntityDescriptor/md:IDPSSODescriptor/@protocolSupportEnumeration" "protocolSupportEnumeration" | ${GREP_BIN} "urn:oasis:names:tc:SAML:2.0:protocol" > /dev/null ; then
-		
+
 			case "${ACTION}" in
-
 				"create")
-					# base64encode the entity descriptor XML
-					B64XML=`cat ${TMP2} | ${OPENSSL_BIN} base64 -a -A`
-				
-					# assemble a request to convert XML to JSON and send it over the Admin API
-					REQ=`make_json "IDP" "SAML20" "${B64XML}"`
-					RESPONSE=`api_request connectionMetadata/convert POST "${REQ}"` || exit
-
-					# assemble a connection create request 
-					REQ=`echo "{ \"conn\": ${RESPONSE}, \"contract\": ${CONTRACT} }" | ${JQ_BIN} '.conn.connection.idpBrowserSso.attributeContract=.contract | .conn.connection | .name="[P] "+ .entityId | del(.credentials.signingSettings)'`
-					
-					# send the request over the Admin API
-					# NB: do not exit if creation/validation fails
-					RESPONSE=`api_request sp/idpConnections POST "${REQ}"`
-
-					printf "OK\n"
+					conn_idp_create "${TMP2}"
 					;;
-
 				"delete")
-					# find the connection by its entityId in the list of all connections
-					CONN=`echo "${ALL_CONNS}" | ${JQ_BIN} --arg entity ${ENTITY} '.items[] | select(.entityId==$entity)'`
-					
-					# see if we have a match
-					if [ -n "${CONN}" ] ; then
-						
-						# assemble and send a connection deactivation request over the Admin API
-						ID=`echo "${CONN}" | ${JQ_BIN} -r '.id'`
-						CONN=`echo "${CONN}" | ${JQ_BIN} '.active=false'`						
-						RESPONSE=`api_request sp/idpConnections/${ID} PUT "${CONN}"` || exit
-						
-						# next send a connection delete request over the Admin API
-						# NB: do not exit on suspicious responses
-						RESPONSE=`api_request sp/idpConnections/${ID} "DELETE"`
-
-						# should return HTTP 204 with an empty response, check that
-						if [ -n "${RESPONSE}" ] ; then
-							printf "ERROR\n"
-							echo ${RESPONSE}
-							exit
-						fi
-						printf " OK\n"
-					else 
-						echo " [SKIP]\n"
-					fi
+					conn_idp_delete "${ENTITY}"
 					;;
 				*)
 					echo "ERROR: unsupported action: \"${ACTION}\""
