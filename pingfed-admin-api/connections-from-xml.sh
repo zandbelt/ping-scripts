@@ -215,8 +215,8 @@ while [ $i -le ${COUNT} ]; do
 	exec_xmllint ${TMP1} "cat /md:EntitiesDescriptor/md:EntityDescriptor[$i]" | ${SED_BIN} "1,1d; $ d" > ${TMP2}
 
 	# grab the entityId	
-	ENTITY=`exec_xmllint ${TMP2} "dir /md:EntityDescriptor/@entityID" "content" | cut -d"=" -f2`	
-
+	ENTITY=`exec_xmllint ${TMP2} "cat /md:EntityDescriptor/@entityID" "entityID" | cut -d"\"" -f2`
+	
 	# print out which entity we are processing
 	printf "[$i] : processing [${ENTITY}] ..."
 
