@@ -45,7 +45,7 @@ TMP2="/tmp/entity.xml"
 
 print_usage() {
 	MSG=$1
-	echo "Usage: $0 [-u <admin-user>:<admin-pwd>] [-s <admin-host>:<admin-port>] [-c <metadata-signing-cert>] [-t <template-connection-entity-id>] <metadata-url> create|delete "
+	echo "Usage: $0 [-u <admin-user>:<admin-pwd>] [-s <admin-host>:<admin-port>] [-c <metadata-signing-cert>] [-t <template-connection-entity-id>] <metadata-url> create|delete|update "
 	if [[ -n ${MSG} ]] ; then echo " # ERROR: ${MSG}"; fi
 	exit 1
 }
@@ -97,7 +97,7 @@ if [ $# -lt 2 ] ; then print_usage; fi
 METADATA_URL=$1
 
 ACTION=$2
-if [[ ${ACTION} != "create" && ${ACTION} != "delete" ]] ; then
+if [[ ${ACTION} != "create"  && ${ACTION} != "update" && ${ACTION} != "delete" ]] ; then
 	print_usage "unsupported action \"${ACTION}\""
 fi
 
@@ -211,6 +211,46 @@ conn_idp_create() {
 	printf "OK\n"
 }
 	
+# update certificates for a connection from an EntityDescriptor in an XML file using the Admin REST API
+conn_idp_update() {
+	local FILE=$1
+	local ENTITYID=$2
+
+	# TODO: REFACTOR NEXT 2 PARAGRAPHS IN TO FUNCTION SHARED WITH conn_idp_delete
+
+	# find the connection by its entityId in the list of all connections
+	CONN=`echo "${ALL_CONNS}" | ${JQ_BIN} --arg entity ${ENTITYID} '.items[] | select(.entityId==$entity)'`
+					
+	# see if we have a match
+	if [ -z "${CONN}" ] ; then
+		echo " [SKIP]\n"
+		return
+	fi
+
+	TEMPLATE_CONN=`echo "${CONN}" | ${JQ_BIN} 'del(.credentials.certs)'`
+	CONTRACT=`echo ${TEMPLATE_CONN} | ${JQ_BIN} '.idpBrowserSso.attributeContract'`
+
+	# TODO: REFACTOR NEXT 2 PARAGRAPHS IN TO FUNCTION SHARED WITH conn_idp_create
+
+	# base64encode the entity descriptor XML
+	B64XML=`cat ${FILE} | ${OPENSSL_BIN} base64 -a -A`
+				
+	# assemble a request to convert XML to JSON and send it over the Admin API
+	REQ=`create_convert_json "IDP" "SAML20" "${B64XML}"`									
+	RESPONSE=`api_request connectionMetadata/convert POST "${REQ}"` || exit
+
+	CERTS=`echo "${RESPONSE}" | ${JQ_BIN} '.connection.credentials.certs | if (. | length) > 1 then .[0].secondaryVerificationCert = true | .[1].primaryVerificationCert = true else .[0].secondaryVerificationCert = false end'`
+	#REQ=`echo "{ \"conn\": ${CONN}, \"certs\": ${CERTS} }"  | ${JQ_BIN} '.conn.credentials.certs=.certs | .conn'`	
+	REQ=`echo "{ \"conn\": ${RESPONSE}, \"contract\": ${CONTRACT}, \"certs\": ${CERTS} }" | ${JQ_BIN} '.conn.connection.idpBrowserSso.attributeContract=.contract | .conn.connection.credentials.certs=.certs | .conn.connection'`
+
+	# assemble and send a connection update request over the Admin API
+	ID=`echo "${CONN}" | ${JQ_BIN} -r '.id'`
+	#update certs
+	RESPONSE=`api_request sp/idpConnections/${ID} PUT "${REQ}"` || exit
+	
+	printf "OK\n"
+}
+
 conn_idp_delete() {
 	local ENTITYID=$1
 	
@@ -246,7 +286,7 @@ conn_idp_delete() {
 COUNT=`exec_xmllint "${TMP1}" "dir /md:EntitiesDescriptor/md:EntityDescriptor" "ELEMENT EntityDescriptor" | wc -l`
 
 # get the list of all current connections from PingFederate
-ALL_CONNS=`api_request sp/idpConnections` || exit
+ALL_CONNS=`api_request sp/idpConnections` || (echo "ERROR: could not obtain list of connections from PingFederate" && exit)
 
 # see if we need to obtain info about a template connection
 if [[ $ACTION == "create" ]] ; then
@@ -284,6 +324,9 @@ while [ $i -le ${COUNT} ]; do
 			case "${ACTION}" in
 				"create")
 					conn_idp_create "${TMP2}"
+					;;
+				"update")
+					conn_idp_update "${TMP2}" "${ENTITY}"
 					;;
 				"delete")
 					conn_idp_delete "${ENTITY}"
