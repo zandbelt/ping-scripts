@@ -1,0 +1,110 @@
+#! /bin/sh
+###########################################################################
+# Copyright (C) 2011 Ping Identity Corporation
+# All rights reserved.
+#
+# The contents of this file are the property of Ping Identity Corporation.
+# For further information please contact:
+#
+# Ping Identity Corporation
+# 1099 18th St Suite 2950
+# Denver, CO 80202
+# 303.468.2900
+#       http://www.pingidentity.com
+#
+# DISCLAIMER OF WARRANTIES:
+#
+# THE SOFTWARE PROVIDED HEREUNDER IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
+# ANY WARRANTIES OR REPRESENTATIONS EXPRESS, IMPLIED OR STATUTORY; INCLUDING,
+# WITHOUT LIMITATION, WARRANTIES OF QUALITY, PERFORMANCE, NONINFRINGEMENT,
+# MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.  NOR ARE THERE ANY
+# WARRANTIES CREATED BY A COURSE OR DEALING, COURSE OF PERFORMANCE OR TRADE
+# USAGE.  FURTHERMORE, THERE ARE NO WARRANTIES THAT THE SOFTWARE WILL MEET
+# YOUR NEEDS OR BE FREE FROM ERRORS, OR THAT THE OPERATION OF THE SOFTWARE
+# WILL BE UNINTERRUPTED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES HOWEVER CAUSED AND ON ANY THEORY OF
+# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+###########################################################################
+#
+# Author: Hans Zandbelt <hzandbelt@pingidentity.com>
+#
+# chkconfig: - 86 16
+#
+### BEGIN INIT INFO
+# Provides:        pingfederate
+# Required-Start:  $network $syslog
+# Required-Stop:   $network $syslog
+# Default-Start:   2 3 4 5
+# Default-Stop:    0 1 6
+# Short-Description: PingFederate
+### END INIT INFO
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+. /lib/lsb/init-functions
+
+JAVA_DIR=/usr/lib/jvm/java-6-sun
+
+JAVA_HOME=$JAVA_DIR
+export JAVA_HOME
+
+NAME=pingfederate
+DESC="PingFederate"
+DAEMON=$JAVA_DIR/bin/java
+PIDFILE=/var/run/$NAME.pid
+RUNASUSER=pingfed
+
+PING_DIR=/usr/local/pingfederate
+START_SH=$PING_DIR/sbin/pingfederate-run.sh
+STOP_SH=$PING_DIR/sbin/pingfederate-shutdown.sh
+
+test -x $JAVA_DIR/bin/java || exit 5
+
+d_start() {
+	#start-stop-daemon --start --chuid $RUNASUSER --exec $START_SH
+	start-stop-daemon --start --exec $START_SH
+	RETVAL="$?"
+	return $RETVAL
+}
+
+d_stop() {
+	#start-stop-daemon --start --chuid $RUNASUSER --exec $STOP_SH
+	start-stop-daemon --start --exec $STOP_SH
+	RETVAL="$?"
+	return $RETVAL
+}
+
+case "$1" in
+	start)
+		log_daemon_msg "Starting $DESC" "$NAME"
+		if d_start; then
+			log_end_msg 0
+		else
+			log_end_msg 1
+		fi
+	;;
+	stop)
+		log_daemon_msg "Stopping $DESC" "$NAME"
+		if d_stop; then
+			log_end_msg 0
+		else
+			log_end_msg 1
+		fi
+		;;
+	restart|force-reload)
+		echo -n "Restarting $DESC" "$NAME"
+		d_stop
+		sleep 10
+		d_start
+		echo "."
+		;;
+	*)
+		log_action_msg "Usage: $0 {start|stop|restart|force-reload}"
+		exit 2
+	;;
+esac
+
+exit 0
