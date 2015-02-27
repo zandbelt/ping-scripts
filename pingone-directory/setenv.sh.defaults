@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# your PingOne directory API credentials
+# CLIENT_ID="xxxx"
+# CLIENT_SECRET="xxxx"
+
+#
+# you should not need to modify the settings below
+#
+
+# PingOne API endpoint
+PINGONE_URL="https://directory-api.pingone.com/api"
+
+# options for CURL (-s for silent now, but may include -v or -k)
+CURL_OPTS="-s"
+
+export CLIENT_ID CLIENT_SECRET PINGONE_URL CURL_OPTS
