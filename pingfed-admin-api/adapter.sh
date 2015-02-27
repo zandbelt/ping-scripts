@@ -20,6 +20,40 @@ case $1 in
 	delete)
 		echo ${FLAGS} | xargs curl -X DELETE ${PF_API}/idp/adapters/${2}
 		;;
+	inherit)
+		# get all configuration fields from the parent adapter and mark them as "inherited"
+		# whilst deleting the parent values, except for the "Authentication Service" field
+		# whose parent value is appended with an "adapterid" parameter
+		FIELDS=`echo ${FLAGS} | xargs curl ${PF_API}/idp/adapters/${2} | jq \
+			".configuration.fields | \
+				map( if .name == \"Authentication Service\" then \
+						. \
+					else \
+						(del(.value) | .inherited = true) end | \
+					 del (.encryptedValue) \
+				) | (.[] | \
+					select(.name == \"Authentication Service\") | .value) |= . + \"&adapterid=\" + \"$3\""`
+		JSON_DATA=`cat <<JSON
+{
+  "id": "${3}",
+  "name": "${3}",
+  "pluginDescriptorRef": {
+    "id": "com.pingidentity.adapters.opentoken.IdpAuthnAdapter"
+  },
+  "parentRef": {
+    "id": "${2}"
+  },
+  "configuration": {
+    "tables": [],
+    "fields": ${FIELDS}
+  },
+  "attributeContract": {
+    "inherited": true
+  }
+}
+JSON`
+		echo ${FLAGS} | xargs curl -H "Content-Type: application/json" --data-binary "${JSON_DATA}" ${PF_API}/idp/adapters
+		;;
 	copy)
 		FROM_JSON=`echo ${FLAGS} | xargs curl ${PF_API}/idp/adapters/${2}`
 		TO_JSON=`echo ${FROM_JSON} | jq " \
@@ -28,6 +62,6 @@ case $1 in
 		echo ${FLAGS} | xargs curl -H "Content-Type: application/json" --data-binary "${TO_JSON}" ${PF_API}/idp/adapters
 		;;
 	*)
-		echo "Usage: $0 [ list | get <id> | delete <id> | copy <from_id> <to_id>"
+		echo "Usage: $0 [ list | get <id> | delete <id> | inherit <parent-id> <child-id> | copy <from_id> <to_id>"
 		;;		
 esac
