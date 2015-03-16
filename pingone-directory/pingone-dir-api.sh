@@ -61,6 +61,25 @@ function group_create() {
 	echo ${CURL_ALL_OPTS} | xargs curl -X POST --data-binary "${JSON_DATA}" ${PINGONE_URL}/directory/group
 }
 
+function group_get_by_uuid() {
+	UUID="$1"
+	echo ${CURL_ALL_OPTS} | xargs curl "${PINGONE_URL}/directory/group/${UUID}"
+}
+
+function group_member_add() {
+	GROUP_UUID="$1"
+	USER_UUID="$2"
+	JSON_DATA="{ \"members\": [ { \"value\":\"${USER_UUID}\", \"type\": \"user\" } ] }";
+	echo ${CURL_ALL_OPTS} | xargs curl -X PATCH --data-binary "${JSON_DATA}" "${PINGONE_URL}/directory/group/${GROUP_UUID}"
+}
+
+function group_member_del() {
+	GROUP_UUID="$1"
+	USER_UUID="$2"
+	JSON_DATA="{ \"members\": [ { \"value\":\"${USER_UUID}\", \"type\": \"user\", \"operation\": \"delete\" } ] }";
+	echo ${CURL_ALL_OPTS} | xargs curl -X PATCH --data-binary "${JSON_DATA}" "${PINGONE_URL}/directory/group/${GROUP_UUID}"
+}
+
 function group_delete() {
 	UUID="$1"
 	echo ${CURL_ALL_OPTS} | xargs curl -X DELETE "${PINGONE_URL}/directory/group/${UUID}"
@@ -132,7 +151,22 @@ case $1 in
 		if [ $# -ne 2 ] ; then print_usage_and_exit "group-create <display-name>"; fi
 		group_create "$2"
 		;;
-	
+
+	group)
+		if [ $# -ne 2 ] ; then print_usage_and_exit "group <uuid>"; fi
+		group_get_by_uuid "$2"
+		;;
+
+	group-member-add)
+		if [ $# -ne 3 ] ; then print_usage_and_exit "group-member-add <group-uuid> <user-uuid>"; fi
+		group_member_add "$2" "$3"
+		;;
+
+	group-member-del)
+		if [ $# -ne 3 ] ; then print_usage_and_exit "group-member-del <group-uuid> <user-uuid>"; fi
+		group_member_del "$2" "$3"
+		;;
+
 	group-delete)
 		if [ $# -ne 2 ] ; then print_usage_and_exit "group-delete <group-uuid>"; fi
 		group_delete "$2"
