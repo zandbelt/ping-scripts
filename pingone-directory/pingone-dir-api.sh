@@ -193,7 +193,7 @@ case $1 in
 		;;
 
 	*)
-		print_usage_and_exit "[ user-list | group-list | group-create | group-delete | user-create | user-delete | user | ropc ]"
+		print_usage_and_exit "[ user-list | group-list | group-create | group-delete | group | group-member-add | group-member-del | user-create | user-delete | user | ropc ]"
 		;;
 
 esac
