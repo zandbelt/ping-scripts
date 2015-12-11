@@ -26,11 +26,10 @@ case $1 in
     "https://localhost:9031/OAuthPlayground/case1A-callback.jsp"
   ],
   "grantTypes": [
-    "AUTHORIZATION_CODE",
-    "REFRESH_TOKEN"
+    "CLIENT_CREDENTIALS"
   ],
   "name": "${2}",
-   "clientAuth": {
+  "clientAuth": {
     "type": "CERTIFICATE",
     "clientCertIssuerDn": "CN=localhost, OU=Development, O=PingIdentity, L=Denver, ST=CO, C=US",
     "clientCertSubjectDn": "CN=${2}"
