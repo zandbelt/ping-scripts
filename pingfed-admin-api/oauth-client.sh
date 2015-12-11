@@ -19,12 +19,14 @@ case $1 in
 		echo ${FLAGS} | xargs curl -X DELETE ${PF_API}/oauth/clients/${2}
 		;;
 	create)
+		#"redirectUris": [ "https://localhost:9031/OAuthPlayground/case1A-callback.jsp" ],	
 		JSON_DATA=`cat <<JSON
 {
   "clientId": "${2}",
-  "redirectUris": [
-    "https://localhost:9031/OAuthPlayground/case1A-callback.jsp"
-  ],
+  "defaultAccessTokenManagerRef": {
+	"id": "default",
+ "location": "https://localhost:9999/pf-admin-api/v1/oauth/accessTokenManagers/descriptors/org.sourceid.oauth20.token.plugin.impl.ReferenceBearerAccessTokenManagementPlugin"
+  },
   "grantTypes": [
     "CLIENT_CREDENTIALS"
   ],
