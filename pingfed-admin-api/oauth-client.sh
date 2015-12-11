@@ -34,7 +34,8 @@ case $1 in
     "clientCertIssuerDn": "CN=localhost, OU=Development, O=PingIdentity, L=Denver, ST=CO, C=US",
     "clientCertSubjectDn": "CN=${2}"
   }
-}JSON`
+}
+JSON`
 		echo ${FLAGS} | xargs curl -H "Content-Type: application/json" --data-binary "${JSON_DATA}" ${PF_API}/oauth/clients
 		;;
 	*)
