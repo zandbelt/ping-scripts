@@ -25,7 +25,7 @@ case $1 in
   "clientId": "${2}",
   "defaultAccessTokenManagerRef": {
 	"id": "default",
- "location": "https://localhost:9999/pf-admin-api/v1/oauth/accessTokenManagers/descriptors/org.sourceid.oauth20.token.plugin.impl.ReferenceBearerAccessTokenManagementPlugin"
+ "location": "${PF_API}/oauth/accessTokenManagers/descriptors/org.sourceid.oauth20.token.plugin.impl.ReferenceBearerAccessTokenManagementPlugin"
   },
   "grantTypes": [
     "CLIENT_CREDENTIALS"
