@@ -22,6 +22,8 @@ Scripts that use the Admin REST API that PingFederate provides since version 7.x
   manage OAuth Clients from the commandline
 - ca-certs.sh  
   manage Trusted CA certificates from the commandline
+- connection-update-virtual-server-id.sh
+  add a virtual server ID to an existing SP Connection
 
 pingone-directory
 -----------------
