@@ -44,3 +44,7 @@ commandline instead of the GUI.
 show-version.sh
 ---------------
 Show the exact version number of PingFederate including minor/build tags.
+
+count-users.sh
+--------------
+Count users by analyzing the audit.log files.
