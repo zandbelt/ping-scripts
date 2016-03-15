@@ -8,14 +8,7 @@ pingfed-admin-api
 Scripts that use the Admin REST API that PingFederate provides since version 7.x.
 
 - connections-from-xml.sh  
-  import (or delete from) PingFederate a set of connections specified in an XML metadata file
-
-pingfed-admin-api
------------------
-Scripts that use the Admin REST API that PingFederate provides since version 7.x.
-
-- connections-from-xml.sh  
-  import (or delete from) PingFederate a set of connections specified in an XML metadata file
+  import into (or delete from) PingFederate a set of IDP connections specified in an XML metadata file
 - adapter.sh  
   manage adapters from the commandline
 - oauth-client.sh  
