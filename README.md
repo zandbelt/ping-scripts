@@ -15,6 +15,8 @@ Scripts that use the Admin REST API that PingFederate provides since version 7.x
   manage OAuth Clients from the commandline
 - ca-certs.sh  
   manage Trusted CA certificates from the commandline
+- ssl-certs.sh  
+  manage SSL server certificates from the commandline
 - archive.sh  
   backup/restore from the commandline
 - connection-update-virtual-server-id.sh  
