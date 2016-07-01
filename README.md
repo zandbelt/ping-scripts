@@ -13,6 +13,8 @@ Scripts that use the Admin REST API that PingFederate provides since version 7.x
   manage adapters from the commandline
 - oauth-client.sh  
   manage OAuth Clients from the commandline
+- oauth-grants.sh  
+  manage OAuth Persistent Grants for a user from the commandline
 - ca-certs.sh  
   manage Trusted CA certificates from the commandline
 - ssl-certs.sh  
