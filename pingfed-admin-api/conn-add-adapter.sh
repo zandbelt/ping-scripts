@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# sample script to add a virtual server id to an existing SP Connection
+# sample script to add an adapter + attribute mapping/lookup to an existing SP Connection
 
 ADM_USER=administrator
 ADM_PWD=2Federate
@@ -9,14 +9,13 @@ PF_API=https://localhost:9999/pf-admin-api/v1
 FLAGS="-k -s -u ${ADM_USER}:${ADM_PWD} --header X-XSRF-Header:\ pingfed"
 
 function print_usage() {
-  echo "Usage: $0 <connection-id> <new-adapter-id> "
+  echo "Usage: $0 <connection-id>"
   exit 1
 }
 
-if [ $# -lt 2 ] ; then print_usage; fi
+if [ $# -lt 1 ] ; then print_usage; fi
 
 SPID=$1
-ADAPTERID=$2
 
 JSON_DATA=`cat <<JSON
       {
