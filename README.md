@@ -47,3 +47,7 @@ Show the exact version number of PingFederate including minor/build tags.
 count-users.sh
 --------------
 Count users by analyzing the audit.log files.
+
+hypersonic.sh
+-------------
+Start a Java-based GUI to inspect the Hypersonic database used e.g. for refresh token storage.
