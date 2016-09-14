@@ -23,6 +23,10 @@ RP_TEST_URL="https://rp.certification.openid.net:8080"
 COOKIE_JAR="/tmp/cookie.jar"
 FLAGS="-s -k -b ${COOKIE_JAR} -c ${COOKIE_JAR}"
 
+function grep_location_header_value() {
+	grep -i "Location:" | cut -d" " -f2 | tr -d '\r' | cut -d"#" -f2
+}
+
 TESTS="
 	rp_discovery_webfinger_url
 	rp_discovery_webfinger_acct
@@ -75,7 +79,7 @@ function rp_discovery_webfinger_acct() {
 	local ACCT="${RP_ID}.${TEST_ID}@${DOMAIN}"
 
 	echo " [${TEST_ID}] initiate Discovery..."
-	exec_discovery ${TEST_ID} ${CSRF} ${ACCT} | grep "Location:"
+	exec_discovery ${TEST_ID} ${CSRF} ${ACCT} | grep_location_header_value
 
 	echo " * "
 	echo " * [server] check that the webfinger request contains acct:"
@@ -115,14 +119,13 @@ function rp_discovery_jwks_uri_keys() {
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
 	echo " [${TEST_ID}] initiate Discovery..."
-	REQUEST=`exec_discovery ${TEST_ID} ${CSRF} ${ISSUER} | grep -i "Location:" | cut -d" " -f2 | tr -d '\r' | cut -d"#" -f2`
+	REQUEST=`exec_discovery ${TEST_ID} ${CSRF} ${ISSUER} | grep_location_header_value`
 	echo " [${TEST_ID}] send authentication request to OP..."
-	RESPONSE=`echo ${FLAGS} -i | xargs curl "${REQUEST}" | grep -i "Location:" | cut -d" " -f2 | tr -d '\r' | cut -d"#" -f2`
+	RESPONSE=`echo ${FLAGS} -i | xargs curl "${REQUEST}" | grep_location_header_value`
 	echo " [${TEST_ID}] return authentication response to RP..."
-	RETURN=`echo ${FLAGS} -i | xargs curl "${RESPONSE}" | grep -i "Location:" | cut -d" " -f2 | tr -d '\r' | cut -d"#" -f2`
+	RETURN=`echo ${FLAGS} -i | xargs curl "${RESPONSE}" | grep_location_header_value`
 	printf " [${TEST_ID}] access application as authenticated user..."
-	echo ${FLAGS} | xargs curl "${RETURN}" | grep -q "\[OIDC_CLAIM_sub\]"
-	if [ $? -eq 0 ]; then echo "SUCCESS"; else echo "ERROR"; fi
+	echo ${FLAGS} | xargs curl "${RETURN}" | grep -q "\[OIDC_CLAIM_sub\]" && echo "SUCCESS" || echo "ERROR"
 
 	echo " * "
 	echo " * [server] check that the id_token returned by the OP verifies correctly with the discovered key"
@@ -138,11 +141,11 @@ function rp_discovery_webfinger_unknown_member() {
 	local ACCT="${RP_ID}.${TEST_ID}@${DOMAIN}"
 
 	echo " [${TEST_ID}] initiate Discovery..."
-	exec_discovery ${TEST_ID} ${CSRF} ${ACCT} | grep "Location:"
+	exec_discovery ${TEST_ID} ${CSRF} ${ACCT} | grep_location_header_value
 
 	echo " * "
 	echo " * [server] check that the webfinger request contains acct: and the response contains \"dummy\": \"foobar\""
-	echo " * [client] check that the authentication request is initiated to the discovered authorization endpoint with the login_hint set to the acct: value"
+	echo " * [server] check that the registration is initiated to the discovered endpoint: ${RP_ID}/${TEST_ID}/registration (and may fail)"
 	echo " * "
 }
 
@@ -173,9 +176,9 @@ function exec_implicit() {
   local CSRF=$2
   local ISSUER="${RP_TEST_URL}/${RP_ID}/_/_/${BEHAVIOR}/normal"
   echo " [${BEHAVIOR}] initiate SSO..."
-  REQUEST=`echo ${FLAGS} -i | xargs curl -G --data-urlencode "iss=${ISSUER}" --data-urlencode "target_link_uri=${TARGET_URL}" --data-urlencode "x_csrf=${CSRF}" ${REDIRECT_URI} | grep -i "Location:" | cut -d" " -f2 | tr -d '\r'`
+  REQUEST=`echo ${FLAGS} -i | xargs curl -G --data-urlencode "iss=${ISSUER}" --data-urlencode "target_link_uri=${TARGET_URL}" --data-urlencode "x_csrf=${CSRF}" ${REDIRECT_URI} | grep_location_header_value`
   echo " [${BEHAVIOR}] send authentication request to OP..."
-  POST_DATA=`echo ${FLAGS} -i | xargs curl "${REQUEST}" | grep -i "Location:" | cut -d" " -f2 | tr -d '\r' | cut -d"#" -f2`
+  POST_DATA=`echo ${FLAGS} -i | xargs curl "${REQUEST}" | grep_location_header_value`
   echo " [${BEHAVIOR}] return authentication response to RP..."
   RESULT=`echo ${FLAGS} | xargs curl -L -d "${POST_DATA}&response_mode=fragment" ${REDIRECT_URI}`
   echo " [${BEHAVIOR}] parsing result..."
