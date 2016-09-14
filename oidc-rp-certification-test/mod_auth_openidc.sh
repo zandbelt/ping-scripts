@@ -34,6 +34,10 @@ TESTS="
 	rp_discovery_openid_configuration
 	rp_discovery_jwks_uri_keys
 	rp_discovery_webfinger_unknown_member
+	rp_registration_dynamic
+	rp_response_type_code
+	rp_token_endpoint_client_secret_basic
+	rp_token_endpoint_client_secret_post
 "
 
 if [ -z $1 ] ; then
@@ -149,6 +153,83 @@ function rp_discovery_webfinger_unknown_member() {
 	echo " * "
 }
 
+function rp_registration_dynamic() {
+	local TEST_ID="rp-registration-dynamic"
+	local CSRF=$1
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	printf " [${TEST_ID}] initiate Discovery and Client Registration..."
+	exec_discovery ${TEST_ID} ${CSRF} ${ISSUER} | grep_location_header_value | grep -q "${RP_TEST_URL}/${RP_ID}/${TEST_ID}/authorization" && echo "SUCCESS" || echo "ERROR"
+
+	echo " * "
+	echo " * [server] check that the registration is initiated and a succesful client registration response is returned"
+	echo " * [client] check that the authentication request is initiated to the discovered authorization endpoint (\"SUCCESS\")"
+	echo " * "
+}
+
+function rp_response_type_code() {
+	local TEST_ID="rp-response_type-code"
+	local CSRF=$1
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	
+	echo " [${TEST_ID}] initiate Discovery..."
+	REQUEST=`exec_discovery ${TEST_ID} ${CSRF} ${ISSUER} | grep_location_header_value`
+	echo " [${TEST_ID}] send authentication request to OP..."
+	RESPONSE=`echo ${FLAGS} -i | xargs curl "${REQUEST}" | grep_location_header_value`
+	echo " [${TEST_ID}] return authentication response to RP..."
+	RETURN=`echo ${FLAGS} -i | xargs curl "${RESPONSE}" | grep_location_header_value`
+	printf " [${TEST_ID}] access application as authenticated user..."
+	echo ${FLAGS} | xargs curl "${RETURN}" | grep -q "\[OIDC_CLAIM_sub\]" && echo "SUCCESS" || echo "ERROR"
+
+	echo " * "
+	echo " * [server] check that the code is returned by the OP to the redirect URI"
+	echo " * [client] check that access the to application is granted as an authenticated user (\"SUCCESS\")"
+	echo " * "	
+}
+
+function rp_token_endpoint_client_secret_basic() {
+	local TEST_ID="rp-token_endpoint-client_secret_basic"
+	local CSRF=$1
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	
+	echo " [${TEST_ID}] initiate Discovery..."
+	REQUEST=`exec_discovery ${TEST_ID} ${CSRF} ${ISSUER} | grep_location_header_value`
+	echo " [${TEST_ID}] send authentication request to OP..."
+	RESPONSE=`echo ${FLAGS} -i | xargs curl "${REQUEST}" | grep_location_header_value`
+	echo " [${TEST_ID}] return authentication response to RP..."
+	RETURN=`echo ${FLAGS} -i | xargs curl "${RESPONSE}" | grep_location_header_value`
+	printf " [${TEST_ID}] access application as authenticated user..."
+	echo ${FLAGS} | xargs curl "${RETURN}" | grep -q "\[OIDC_CLAIM_sub\]" && echo "SUCCESS" || echo "ERROR"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"client_secret_basic\""
+	echo " * [server] check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_basic\""
+	echo " * [server] check that the code is exchanged at the OP with a \"basic_auth\" value passed to the \"oidc_util_http_call\" function"
+	echo " * [client] check that access the to application is granted as an authenticated user (\"SUCCESS\")"
+	echo " * "		
+}
+
+function rp_token_endpoint_client_secret_post() {
+	local TEST_ID="rp-token_endpoint-client_secret_post"
+	local CSRF=$1
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	
+	echo " [${TEST_ID}] initiate Discovery..."
+	REQUEST=`exec_discovery ${TEST_ID} ${CSRF} ${ISSUER} | grep_location_header_value`
+	echo " [${TEST_ID}] send authentication request to OP..."
+	RESPONSE=`echo ${FLAGS} -i | xargs curl "${REQUEST}" | grep_location_header_value`
+	echo " [${TEST_ID}] return authentication response to RP..."
+	RETURN=`echo ${FLAGS} -i | xargs curl "${RESPONSE}" | grep_location_header_value`
+	printf " [${TEST_ID}] access application as authenticated user..."
+	echo ${FLAGS} | xargs curl "${RETURN}" | grep -q "\[OIDC_CLAIM_sub\]" && echo "SUCCESS" || echo "ERROR"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"client_secret_post\""
+	echo " * [server] check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_post\""
+	echo " * [server] check that the code is exchanged at the OP with a \"client_id\" and \"client_secret\" passed to the \"oidc_util_http_call\" function as POST parameters"
+	echo " * [client] check that access the to application is granted as an authenticated user (\"SUCCESS\")"
+	echo " * "		
+}
 
 exec_init $1
 
