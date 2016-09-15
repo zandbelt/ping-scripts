@@ -112,6 +112,7 @@ function find_in_logfile() {
 # create CSRF token to be supplied on subsequent calls
 function exec_init() {
 	local TEST_ID=$1
+	echo ""
 	message ${TEST_ID} "initiate CSRF" "-n"
 	local RESPONSE=`echo ${FLAGS} -j | xargs curl ${TARGET_URL}`
 	if [ $? -ne 0 ] ; then
@@ -125,6 +126,7 @@ function exec_init() {
 	else
 		echo "OK"
 	fi
+	echo ""
 }
 
 # call the RP endpoint (=mod_auth_openidc's redirect URI) to kick off discovery and/or SSO
@@ -153,7 +155,7 @@ function initiate_discovery() {
 	elif [ "${RESULT_PARAM}" == "authorization" ] ; then
 		echo "${RESULT}" | grep -q "${RP_TEST_URL}/${RP_ID}/${TEST_ID}/authorization" && echo "OK" || echo "ERROR"
 	fi
-	# else it should be "nogrep"
+	# else it should be "nogrep" or "return"
 }
 
 function grep_location_header_value_result() {
@@ -261,7 +263,7 @@ function rp_discovery_webfinger_acct() {
 	local DOMAIN=`echo ${RP_TEST_URL} | cut -d"/" -f3`
 	local ACCT="${RP_ID}.${TEST_ID}@${DOMAIN}"
 
-	initiate_discovery ${TEST_ID} ${ACCT}
+	initiate_discovery ${TEST_ID} ${ACCT} "return"
 	
 	# check that the authentication request contains a login_hint parameter set to the acct: value
 	echo ${RESULT} | grep -q "&login_hint=${RP_ID}" && echo "OK" || echo "ERROR"
@@ -368,14 +370,25 @@ function rp_token_endpoint_client_secret_post() {
 }
 
 function  rp_token_endpoint_client_secret_jwt() {
-	regular_flow "rp-token_endpoint-client_secret_jwt"
+	local TEST_ID="rp-token_endpoint-client_secret_jwt"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+	# check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_jwt\"
+	# check that the code is exchanged at the OP with a \"basic_auth=(null)\" and a \"client_assertion\" parameter to the \"oidc_util_http_call\" function
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	find_in_logfile "${TEST_ID}" "check code exchange" 100 "oidc_util_http_call: url=${ISSUER}/token" "grant_type=authorization_code"
+
+	#check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_jwt\""
+	#server] check that the code is exchanged at the OP with a \"client_assertion\" passed to the \"oidc_util_http_call\" function as a POST parameter"
+	message "${TEST_ID}" "check client_assertion auth" "-n"
+	tail -n 100 ${LOG_FILE} | grep "oidc_util_http_call: url=${ISSUER}/token" | grep "grant_type=authorization_code" | grep "content_type=application/x-www-form-urlencoded" | grep "basic_auth=(null)" | grep -q "client_assertion=" && echo "OK" || echo "ERROR: client_assertion authentication not found"
 
 	echo " * "
 	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"client_secret_jwt\""
-	echo " * [server] check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_jwt\""
-	echo " * [server] check that the code is exchanged at the OP with a \"client_assertion\" passed to the \"oidc_util_http_call\" function as a POST parameter"
-	echo " * [client] check that access the to application is granted as an authenticated user (\"OK\")"
 	echo " * "		
+		
 }
 
 function  rp_token_endpoint_private_key_jwt() {
@@ -389,13 +402,22 @@ function  rp_token_endpoint_private_key_jwt() {
 	echo " * "		
 }
 
+function execute_test() {
+	local TEST_ID="${1}"
+	
+	echo "  # ${TEST_ID}"
+	echo ""
+	eval "${TEST_ID}"
+	echo ""
+}
+
 exec_init $1
 
 if [ $1 != "all" ] ; then
-	eval $1
+		execute_test "${1}"
 else
 	for TEST_ID in $TESTS; do
-		eval $TEST_ID
+		execute_test "${TEST_ID}"
 	done
 fi
 
