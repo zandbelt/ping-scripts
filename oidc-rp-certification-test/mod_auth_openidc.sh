@@ -3,12 +3,17 @@
 ###########################################################################
 # Copyright (C) 2016 Ping Identity Corporation
 #
-# Script used to do semi-automated OpenID Connect Relying Party Certification
+# Script used to do automated OpenID Connect Relying Party Certification
 # Testing for the mod_auth_openidc OIDC RP implementation for Apache HTTPd.
 # 
 # @Author: Hans Zandbelt - hzandbelt@pingidentity.com
 #
 ###########################################################################
+
+# TODO:
+# rp_token_endpoint_private_key_jwt
+# rp_id_token_kid_absent_single_jwks
+# rp_id_token_sig_enc
 
 REDIRECT_URI="<THE-REDIRECT_URI-OF-YOUR-APACHE-MOD_AUTH_OPENIDC-INSTANCE>"
 TARGET_URL="<YOUR-APPLICATION-URL-PROTECTED-BY-MOD_AUTH_OPENIDC>"
@@ -37,20 +42,20 @@ TESTS="
 	rp_token_endpoint_client_secret_post
 	rp_token_endpoint_client_secret_jwt
 	rp_token_endpoint_private_key_jwt
+	rp_id_token_aud
+	rp_id_token_bad_sig_es256
+	rp_id_token_bad_sig_hs256
+	rp_id_token_bad_sig_rs256
+	rp_id_token_iat
+	rp_id_token_issuer_mismatch
+	rp_id_token_kid_absent_multiple_jwks
+	rp_id_token_kid_absent_single_jwks
+	rp_id_token_sig_enc
+	rp_id_token_sig_none
+	rp_id_token_sub
 "
 
 #	rp-discovery-webfinger-http-href
-#	rp-id_token-aud
-#	rp-id_token-bad-sig-es256
-#	rp-id_token-bad-sig-hs256
-#	rp-id_token-bad-sig-rs256
-#	rp-id_token-iat
-#	rp-id_token-issuer-mismatch
-#	rp-id_token-kid-absent-multiple-jwks
-#	rp-id_token-kid-absent-single-jwks
-#	rp-id_token-sig+enc
-#	rp-id_token-sig-none
-#	rp-id_token-sub
 #	rp-claims_request-id_token
 #	rp-claims_request-userinfo
 #	rp-request_uri-enc
@@ -81,7 +86,7 @@ function message() {
 	local ID=$1
 	local MSG=$2
 	local PARAM=$3
-	printf " [" && date +"%D %T" | tr -d '\n' && printf "] " && printf "%s: %s..." "${ID}" "${MSG}"
+	printf " [" && date +"%D %T" | tr -d '\n' && printf "] " && printf "%s: %s ... " "${ID}" "${MSG}"
 	if [ "$PARAM" != "-n" ] ; then
 		printf "\n"
 	fi
@@ -160,12 +165,12 @@ function initiate_discovery() {
 
 function grep_location_header_value_result() {
 	if [ $? -ne 0 ] ; then
-		echo "ERROR"
+		echo "ERROR: result is: \"${RESULT}\""
 		exit
 	fi
 	RESULT=`echo "${RESULT}" | grep_location_header_value`
 	if [ $? -ne 0 ] ; then
-		echo "ERROR"
+		echo "ERROR: could not parse Location header from: \"${RESULT}\""
 		exit
 	else
 		echo "OK"
@@ -317,89 +322,235 @@ function rp_registration_dynamic() {
 function rp_response_type_code() {
 	local TEST_ID="rp-response_type-code"
 
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"response_type\" is set to \"code\""
+	echo " * "
+
 	# test a regular flow up until successful authenticated application access
 	regular_flow "${TEST_ID}"
 		
 	# check that the code is returned by the OP to the redirect URI"
-	find_in_logfile "${TEST_ID}" "check response type" 150 "oidc_check_user_id: incoming request:" "&code="
-	
-	echo " * "
-	echo " * [server] prerequisite: .conf exists and \"response_type\" is set to \"code\""
-	echo " * "
+	find_in_logfile "${TEST_ID}" "check response type" 150 "oidc_check_user_id: incoming request:" "&code="	
 }
-
 
 function rp_token_endpoint_client_secret_basic() {
 	local TEST_ID="rp-token_endpoint-client_secret_basic"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"client_secret_basic\""
+	echo " * "		
 
 	# test a regular flow up until successful authenticated application access
 	regular_flow "${TEST_ID}"
 
-	# check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_basic\"
-	# check that the code is exchanged at the OP with a \"basic_auth\" value passed to the \"oidc_util_http_call\" function
-	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
-	find_in_logfile "${TEST_ID}" "check code exchange" 100 "oidc_util_http_call: url=${ISSUER}/token" "grant_type=authorization_code"
+	# check that the token endpoint auth method is set to "client_secret_basic"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_basic"
 
-	# TODO: check that basic_auth is not "basic_auth=(null)"
+	# check that basic_auth is set to something other than "basic_auth=(null)"
 	message "${TEST_ID}" "check basic auth" "-n"
-	tail -n 100 ${LOG_FILE} | grep "oidc_util_http_call: url=${ISSUER}/token" | grep "grant_type=authorization_code" | grep -q -v "basic_auth=(null)" && echo "OK" || echo "ERROR: basic_auth not found"
+	tail -n 100 ${LOG_FILE} | grep "oidc_util_http_call: url=${ISSUER}/token" | grep "grant_type=authorization_code" | grep -q "basic_auth=(null)" && { echo "ERROR: basic_auth found" && exit; } || echo "OK"
 	
-	echo " * "
-	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"client_secret_basic\""
-	echo " * "		
+	# check that the response from the token endpoint call is successful
+	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "
 }
 
 function rp_token_endpoint_client_secret_post() {
 	local TEST_ID="rp-token_endpoint-client_secret_post"
-
-	# test a regular flow up until successful authenticated application access
-	regular_flow "${TEST_ID}"
-
-	# check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_post\"
-	# check that the code is exchanged at the OP with a \"basic_auth=(null)\" and a \"client_id\" and \"client_secret\" value passed 
-	# as POST parameters to the \"oidc_util_http_call\" function
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
-	find_in_logfile "${TEST_ID}" "check code exchange" 100 "oidc_util_http_call: url=${ISSUER}/token" "grant_type=authorization_code"
-
-	message "${TEST_ID}" "check POST auth" "-n"
-	tail -n 100 ${LOG_FILE} | grep "oidc_util_http_call: url=${ISSUER}/token" | grep "grant_type=authorization_code" | grep "content_type=application/x-www-form-urlencoded" | grep "basic_auth=(null)" | grep "client_id=" | grep -q "client_secret=" && echo "OK" || echo "ERROR: POST authentication not found"
 
 	echo " * "
 	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"client_secret_post\""
 	echo " * "		
-}
-
-function  rp_token_endpoint_client_secret_jwt() {
-	local TEST_ID="rp-token_endpoint-client_secret_jwt"
 
 	# test a regular flow up until successful authenticated application access
 	regular_flow "${TEST_ID}"
 
-	# check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_jwt\"
-	# check that the code is exchanged at the OP with a \"basic_auth=(null)\" and a \"client_assertion\" parameter to the \"oidc_util_http_call\" function
-	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
-	find_in_logfile "${TEST_ID}" "check code exchange" 100 "oidc_util_http_call: url=${ISSUER}/token" "grant_type=authorization_code"
+	# check that the token endpoint auth method is set to "client_secret_post"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_post"
 
-	#check that the client was registered with \"token_endpoint_auth_method\" set to \"client_secret_jwt\""
-	#server] check that the code is exchanged at the OP with a \"client_assertion\" passed to the \"oidc_util_http_call\" function as a POST parameter"
-	message "${TEST_ID}" "check client_assertion auth" "-n"
-	tail -n 100 ${LOG_FILE} | grep "oidc_util_http_call: url=${ISSUER}/token" | grep "grant_type=authorization_code" | grep "content_type=application/x-www-form-urlencoded" | grep "basic_auth=(null)" | grep -q "client_assertion=" && echo "OK" || echo "ERROR: client_assertion authentication not found"
+	# check that the client_secret is passed 
+	find_in_logfile "${TEST_ID}" "check post auth" 100 "oidc_util_http_call: url=${ISSUER}/token" "client_secret="
+
+	# check that the response from the token endpoint call is successful
+	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "
+}
+
+function  rp_token_endpoint_client_secret_jwt() {
+	local TEST_ID="rp-token_endpoint-client_secret_jwt"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
 	echo " * "
 	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"client_secret_jwt\""
 	echo " * "		
-		
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+	# check that the token endpoint auth method is set to "client_secret_jwt"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_jwt"
+
+	# check that the client_assertion is passed 
+	find_in_logfile "${TEST_ID}" "check client assertion auth" 100 "oidc_util_http_call: url=${ISSUER}/token" "client_assertion="
+
+	# check that the response from the token endpoint call is successful
+	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "		
 }
 
 function  rp_token_endpoint_private_key_jwt() {
-	regular_flow "rp-token_endpoint-private_key_jwt"
+	local TEST_ID="rp-token_endpoint-private_key_jwt"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
 	echo " * "
 	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"private_key_jwt\""
-	echo " * [server] check that the client was registered with \"token_endpoint_auth_method\" set to \"private_key_jwt\""
-	echo " * [server] check that the code is exchanged at the OP with a \"client_assertion\" passed to the \"oidc_util_http_call\" function as a POST parameter"
-	echo " * [client] check that access the to application is granted as an authenticated user (\"OK\")"
-	echo " * "		
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+	# check that the token endpoint auth method is set to "private_key_jwt"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=private_key_jwt"
+
+	# check that the client_assertion is passed 
+	find_in_logfile "${TEST_ID}" "check client assertion auth" 100 "oidc_util_http_call: url=${ISSUER}/token" "client_assertion="
+
+	# check that the response from the token endpoint call is successful
+	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "
+}
+
+function rp_id_token_auth() {
+	local TEST_ID="rp-id_token-aud"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+		
+	find_in_logfile "${TEST_ID}" "check aud mismatch" 10 "oidc_proto_validate_aud_and_azp: our configured client_id (" ") could not be found in the array of values for \"aud\" claim"
+}
+
+function rp_id_token_bad_sig_es256() {
+	local TEST_ID="rp-id_token-bad-sig-es256"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+		
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+
+	find_in_logfile "${TEST_ID}" "check EC id_token" 25 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"ES256\""
+	find_in_logfile "${TEST_ID}" "check EC signature mismatch" 10 "oidc_proto_jwt_verify: JWT signature verification failed" "_cjose_jws_verify_sig_ec"
+}
+
+function rp_id_token_bad_sig_hs256() {
+	local TEST_ID="rp-id_token-bad-sig-hs256"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+
+	find_in_logfile "${TEST_ID}" "check HS id_token" 25 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"HS256\""
+	find_in_logfile "${TEST_ID}" "check HS signature mismatch" 10 "oidc_proto_jwt_verify: JWT signature verification failed" "could not verify signature against any of the (1) provided keys"
+}
+
+function rp_id_token_bad_sig_rs256() {
+	local TEST_ID="rp-id_token-bad-sig-rs256"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+
+	find_in_logfile "${TEST_ID}" "check RS id_token" 25 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"RS256\""
+	find_in_logfile "${TEST_ID}" "check RS signature mismatch" 10 "oidc_proto_jwt_verify: JWT signature verification failed" "_cjose_jws_verify_sig_rs"
+}
+
+function rp_id_token_iat() {
+	local TEST_ID="rp-id_token-iat"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+
+	find_in_logfile "${TEST_ID}" "check missing iat" 25 "oidc_proto_validate_iat: JWT did not contain an \"iat\" number value"
+	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
+}
+
+function rp_id_token_issuer_mismatch() {
+	local TEST_ID="rp-id_token-issuer-mismatch"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+
+	find_in_logfile "${TEST_ID}" "check issuer mismatch" 25 "oidc_proto_validate_jwt: requested issuer (${ISSUER}) does not match received \"iss\" value in id_token (https://example.org/)"
+	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
+}
+
+function rp_id_token_kid_absent_multiple_jwks() {
+	local TEST_ID="rp-id_token-kid-absent-multiple-jwks"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+
+	find_in_logfile "${TEST_ID}" "check missing JWK" 25 "oidc_proto_jwt_verify: JWT signature verification failed" "could not verify signature against any of the"
+	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token signature could not be validated, aborting"
+}
+
+function rp_id_token_kid_absent_single_jwks() {
+	local TEST_ID="rp-id_token-kid-absent-single-jwks"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+	# TODO: search for successful validation using one key without a "kid"
+	find_in_logfile "${TEST_ID}" "check missing kid" 100 "blabla"
+}
+
+function rp_id_token_sig_enc() {
+	local TEST_ID="rp-id_token-sig+enc"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"id_token_encrypted_response_alg\" is set to e.g. \"A128KW\""
+	echo " * [server] prerequisite: .conf exists and \"id_token_encrypted_response_enc\" is set to e.g. \"A256CBC-HS512\""
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+}
+
+function rp_id_token_sig_none() {
+	local TEST_ID="rp-id_token-sig-none"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+	# make sure we were using the code flow
+	find_in_logfile "${TEST_ID}" "check code flow" 100 "oidc_util_http_post_form: post data=\"grant_type=authorization_code&code="
+	# make sure the id_token has alg "none" set
+	find_in_logfile "${TEST_ID}" "check alg none" 100 "oidc_proto_parse_idtoken: successfully parsed" "JWT with header={\"alg\":\"none\"}"
+	# check that we finished id_token validation succesfully
+	find_in_logfile "${TEST_ID}" "check valid id_token" 100 "oidc_proto_parse_idtoken: valid id_token for user"
+}
+
+function rp_id_token_sub() {
+	local TEST_ID="rp-id_token-sub"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	initiate_discovery ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
+	
+	find_in_logfile "${TEST_ID}" "check missing sub" 25 "oidc_proto_validate_idtoken: id_token JSON payload did not contain the required-by-spec \"sub\" string value"
+	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
 }
 
 function execute_test() {
