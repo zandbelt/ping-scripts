@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 ###########################################################################
 # Copyright (C) 2016 Ping Identity Corporation
@@ -9,11 +9,6 @@
 # @Author: Hans Zandbelt - hzandbelt@pingidentity.com
 #
 ###########################################################################
-
-# TODO:
-# rp_token_endpoint_private_key_jwt
-# rp_id_token_kid_absent_single_jwks
-# rp_id_token_sig_enc
 
 REDIRECT_URI="<THE-REDIRECT_URI-OF-YOUR-APACHE-MOD_AUTH_OPENIDC-INSTANCE>"
 TARGET_URL="<YOUR-APPLICATION-URL-PROTECTED-BY-MOD_AUTH_OPENIDC>"
@@ -34,6 +29,7 @@ TESTS="
 	rp_discovery_jwks_uri_keys
 	rp_discovery_openid_configuration
 	rp_discovery_webfinger_acct
+	rp_discovery_webfinger_http_href
 	rp_discovery_webfinger_unknown_member
 	rp_discovery_webfinger_url
 	rp_registration_dynamic
@@ -53,32 +49,39 @@ TESTS="
 	rp_id_token_sig_enc
 	rp_id_token_sig_none
 	rp_id_token_sub
+	rp_claims_request_userinfo
+	rp_scope_userinfo_claims
+	rp_key_rotation_op_sign_key
+	rp_userinfo_bad_sub_claim
+	rp_userinfo_bearer_header
+	rp_userinfo_sig
+	rp_userinfo_enc
+	rp_userinfo_sig_enc	
+	rp_request_uri_sig
+	rp_request_uri_unsigned
 "
 
-#	rp-discovery-webfinger-http-href
-#	rp-claims_request-id_token
-#	rp-claims_request-userinfo
-#	rp-request_uri-enc
-#	rp-request_uri-sig
-#	rp-request_uri-sig+enc
-#	rp-request_uri-unsigned
-#	rp-scope-userinfo-claims
-#	rp-key-rotation-op-enc-key
-#	rp-key-rotation-op-sign-key
-#	rp-key-rotation-rp-enc-key
-#	rp-key-rotation-rp-sign-key
-#	rp-userinfo-bad-sub-claim
-#	rp-userinfo-bearer-body
-#	rp-userinfo-bearer-header
-#	rp-userinfo-enc
-#	rp-userinfo-sig
-#	rp-userinfo-sig+enc	
+TESTS_ERR="
+	rp_claims_request_id_token
+"
+
+TESTS_UNSUPPORTED="
+	rp-key-rotation-rp-sign-key
+	rp-key-rotation-rp-enc-key
+	rp-userinfo-bearer-body
+"
+
+TESTS_TODO="
+	rp-request_uri-enc
+	rp-request_uri-sig+enc
+	rp-key-rotation-op-enc-key
+"
 
 if [ -z $1 ] ; then
-  echo
-  echo "Usage: ${0} [all|${TESTS}]"
-  echo
-  exit
+	echo
+	printf "Usage: ${0}\n\tall${TESTS}"
+	echo
+	exit
 fi
 
 # printout a test message
@@ -114,10 +117,10 @@ function find_in_logfile() {
 	fi
 }
 
-# create CSRF token to be supplied on subsequent calls
-function exec_init() {
+# create CSRF token to be supplied on subsequent call
+function create_csrf() {
 	local TEST_ID=$1
-	echo ""
+
 	message ${TEST_ID} "initiate CSRF" "-n"
 	local RESPONSE=`echo ${FLAGS} -j | xargs curl ${TARGET_URL}`
 	if [ $? -ne 0 ] ; then
@@ -131,16 +134,17 @@ function exec_init() {
 	else
 		echo "OK"
 	fi
-	echo ""
 }
 
 # call the RP endpoint (=mod_auth_openidc's redirect URI) to kick off discovery and/or SSO
-function initiate_discovery() {
+function initiate_sso() {
 	local TEST_ID=$1
 	local ISSUER=$2
 	local RESULT_PARAM=$3
 
-	message "${TEST_ID}" "initiate Discovery" "-n"
+	create_csrf "${TEST_ID}"
+
+	message "${TEST_ID}" "initiate SSO" "-n"
 	RESULT=`echo ${FLAGS} -i | xargs curl -G --data-urlencode "iss=${ISSUER}" --data-urlencode "target_link_uri=${TARGET_URL}" --data-urlencode "x_csrf=${CSRF}" ${REDIRECT_URI}`
 	if [ $? -ne 0 ] ; then
 		echo "ERROR"
@@ -158,7 +162,7 @@ function initiate_discovery() {
 	if [ -z "${RESULT_PARAM}" ] ; then
 		echo "OK"
 	elif [ "${RESULT_PARAM}" == "authorization" ] ; then
-		echo "${RESULT}" | grep -q "${RP_TEST_URL}/${RP_ID}/${TEST_ID}/authorization" && echo "OK" || echo "ERROR"
+		echo "${RESULT}" | grep -q "${RP_TEST_URL}/${RP_ID}/${TEST_ID}/authorization" && echo "OK" || { echo "ERROR: no authentication request found in redirect" && exit; }
 	fi
 	# else it should be "nogrep" or "return"
 }
@@ -166,6 +170,10 @@ function initiate_discovery() {
 function grep_location_header_value_result() {
 	if [ $? -ne 0 ] ; then
 		echo "ERROR: result is: \"${RESULT}\""
+		exit
+	fi
+	if `echo "${RESULT}" | head -1 | grep -q "HTTP/1.1 4"` ; then
+		echo "ERROR: result is:\n${RESULT}"
 		exit
 	fi
 	RESULT=`echo "${RESULT}" | grep_location_header_value`
@@ -183,7 +191,7 @@ function send_authentication_request() {
 	local REQUEST=$2
 	
 	message "${TEST_ID}" "send authentication request to OP" "-n"
-	RESULT=`echo ${FLAGS} -i | xargs curl "${REQUEST}"` 
+	RESULT=`echo ${FLAGS} -i | xargs curl "${REQUEST}"`
 	grep_location_header_value_result
 }
 
@@ -213,7 +221,7 @@ function regular_flow() {
 	local TEST_ID=$1
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 	application_access ${TEST_ID} ${RESULT}
@@ -227,7 +235,7 @@ function rp_discovery_issuer_not_matching_config() {
 	local TEST_ID="rp-discovery-issuer-not-matching-config"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery "${TEST_ID}" "${ISSUER}" "nogrep"
+	initiate_sso "${TEST_ID}" "${ISSUER}" "nogrep"
 	MATCH="Could not find valid provider metadata"
 	echo "${RESULT}" | grep -q "${MATCH}" && echo "OK" || { printf "ERROR:\n could not find \"%s\" in client HTML output:\n%s\n" "${MATCH}" "${RESULT}" && exit; }
 
@@ -256,7 +264,7 @@ function rp_discovery_openid_configuration() {
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
 	# check that the authentication request is initiated to the discovered authorization endpoint
-	initiate_discovery "${TEST_ID}" "${ISSUER}" "authorization"
+	initiate_sso "${TEST_ID}" "${ISSUER}" "authorization"
 
 	# check that the registration is initiated to the discovered endpoint: ${RP_ID}/${TEST_ID}/registration"
 	# TODO: can only do this if the .provider file was cleaned up beforehand
@@ -268,7 +276,7 @@ function rp_discovery_webfinger_acct() {
 	local DOMAIN=`echo ${RP_TEST_URL} | cut -d"/" -f3`
 	local ACCT="${RP_ID}.${TEST_ID}@${DOMAIN}"
 
-	initiate_discovery ${TEST_ID} ${ACCT} "return"
+	initiate_sso ${TEST_ID} ${ACCT} "return"
 	
 	# check that the authentication request contains a login_hint parameter set to the acct: value
 	echo ${RESULT} | grep -q "&login_hint=${RP_ID}" && echo "OK" || echo "ERROR"
@@ -277,7 +285,22 @@ function rp_discovery_webfinger_acct() {
 	URL="${RP_TEST_URL}/.well-known/webfinger?resource=acct%3A${RP_ID}.${TEST_ID}%40rp.certification.openid.net%3A8080&rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer"
 	find_in_logfile "${TEST_ID}" "check webfinger request" 50 "oidc_util_http_get: get URL=\"${URL}\""
 	# check that the webfinger request contains the right issuer:"
-	find_in_logfile "${TEST_ID}" "check webfinger issuer result" 50 "oidc_proto_account_based_discovery: returning issuer \"https://rp.certification.openid.net:8080/mod_auth_openidc/rp-discovery-webfinger-acct\" for account \"${ACCT}\" after doing successful webfinger-based discovery"
+	find_in_logfile "${TEST_ID}" "check webfinger issuer result" 50 "oidc_proto_webfinger_discovery: returning issuer \"https://rp.certification.openid.net:8080/mod_auth_openidc/rp-discovery-webfinger-acct\" for resource \"acct:${ACCT}\" after doing successful webfinger-based discovery"
+}
+
+function rp_discovery_webfinger_http_href() {
+	local TEST_ID="rp-discovery-webfinger-http-href"
+	local DOMAIN=`echo ${RP_TEST_URL} | cut -d"/" -f3`
+	local ACCT="${RP_ID}.${TEST_ID}@${DOMAIN}"
+
+	# check that the authentication request is initiated to the discovered authorization endpoint
+	initiate_sso "${TEST_ID}" "${ACCT}" "nogrep"
+	
+	MATCH="Could not resolve the provided account name to an OpenID Connect provider"
+	echo "${RESULT}" | grep -q "${MATCH}" && echo "OK" || { printf "ERROR:\n could not find \"%s\" in client HTML output:\n%s\n" "${MATCH}" "${RESULT}" && exit; }
+
+	# check that the module choked on the plain HTTP href value
+	find_in_logfile "${TEST_ID}" "check webfinger response" 25 "oidc_proto_webfinger_discovery: response JSON object contains an \"href\" value that is not a valid \"https\" URL"
 }
 
 function rp_discovery_webfinger_unknown_member() {
@@ -286,7 +309,7 @@ function rp_discovery_webfinger_unknown_member() {
 	local ACCT="${RP_ID}.${TEST_ID}@${DOMAIN}"
 
 	# check that the authentication request is initiated to the discovered authorization endpoint
-	initiate_discovery "${TEST_ID}" "${ACCT}" "authorization"
+	initiate_sso "${TEST_ID}" "${ACCT}" "authorization"
 
 	# check that the webfinger request contains acct:
 	URL="${RP_TEST_URL}/.well-known/webfinger?resource=acct%3A${RP_ID}.${TEST_ID}%40rp.certification.openid.net%3A8080&rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer"
@@ -297,15 +320,25 @@ function rp_discovery_webfinger_unknown_member() {
 
 function rp_discovery_webfinger_url() {
 	local TEST_ID="rp-discovery-webfinger-url"
-	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
-		
-	# check that the authentication request is initiated to the discovered authorization endpoint
-	initiate_discovery "${TEST_ID}" "${ISSUER}" "authorization"
+	local USER_INPUT="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	# check that the registration is initiated to the discovered endpoint: ${RP_ID}/${TEST_ID}/registration"				
-	echo " * "
-	echo " * [TODO] mod_auth_openidc does not support URL user syntax"
-	echo " * "
+	create_csrf "${TEST_ID}"
+
+	message "${TEST_ID}" "initiate URL based Discovery" "-n"
+	RESULT=`echo ${FLAGS} -i | xargs curl -G --data-urlencode "disc_user=${USER_INPUT}" --data-urlencode "target_link_uri=${TARGET_URL}" --data-urlencode "x_csrf=${CSRF}" ${REDIRECT_URI}`
+	if [ $? -ne 0 ] ; then
+		echo "ERROR"
+		exit
+	fi
+	
+	# check that the authentication request contains a login_hint parameter set to the URL value
+	echo ${RESULT} | grep -q "&login_hint=" && echo "OK" || { printf "ERROR: could not find \"login_hint=\" in authorization request\n" && exit; }
+
+	# check that the webfinger request contains the URL"
+	URL="${RP_TEST_URL}/.well-known/webfinger?resource=https%3A%2F%2Frp.certification.openid.net%3A8080%2F${RP_ID}%2F${TEST_ID}&rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer"
+	find_in_logfile "${TEST_ID}" "check webfinger request" 50 "oidc_util_http_get: get URL=\"${URL}\""
+	# check that the webfinger request contains the right issuer:"
+	find_in_logfile "${TEST_ID}" "check webfinger issuer result" 50 "oidc_proto_webfinger_discovery: returning issuer \"https://rp.certification.openid.net:8080/mod_auth_openidc/rp-discovery-webfinger-url\" for resource \"${USER_INPUT}\" after doing successful webfinger-based discovery"
 }
 
 function rp_registration_dynamic() {
@@ -313,7 +346,7 @@ function rp_registration_dynamic() {
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
 	# check that the authentication request is initiated to the discovered authorization endpoint
-	initiate_discovery "${TEST_ID}" "${ISSUER}" "authorization"
+	initiate_sso "${TEST_ID}" "${ISSUER}" "authorization"
 
 	# TODO: only when .client file is cleaned up
 	# check that the registration is initiated and a successful client registration response is returned"
@@ -405,8 +438,10 @@ function  rp_token_endpoint_private_key_jwt() {
 	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"private_key_jwt\""
 	echo " * "
 
-	# test a regular flow up until successful authenticated application access
-	regular_flow "${TEST_ID}"
+	# private_key_jwt may fail token validation
+	initiate_sso ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
 
 	# check that the token endpoint auth method is set to "private_key_jwt"
 	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=private_key_jwt"
@@ -418,11 +453,11 @@ function  rp_token_endpoint_private_key_jwt() {
 	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "
 }
 
-function rp_id_token_auth() {
+function rp_id_token_aud() {
 	local TEST_ID="rp-id_token-aud"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 		
@@ -433,7 +468,7 @@ function rp_id_token_bad_sig_es256() {
 	local TEST_ID="rp-id_token-bad-sig-es256"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 		
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
@@ -445,7 +480,7 @@ function rp_id_token_bad_sig_hs256() {
 	local TEST_ID="rp-id_token-bad-sig-hs256"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
@@ -457,7 +492,7 @@ function rp_id_token_bad_sig_rs256() {
 	local TEST_ID="rp-id_token-bad-sig-rs256"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
@@ -469,7 +504,7 @@ function rp_id_token_iat() {
 	local TEST_ID="rp-id_token-iat"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
@@ -481,7 +516,7 @@ function rp_id_token_issuer_mismatch() {
 	local TEST_ID="rp-id_token-issuer-mismatch"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
@@ -493,7 +528,7 @@ function rp_id_token_kid_absent_multiple_jwks() {
 	local TEST_ID="rp-id_token-kid-absent-multiple-jwks"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
@@ -505,11 +540,12 @@ function rp_id_token_kid_absent_single_jwks() {
 	local TEST_ID="rp-id_token-kid-absent-single-jwks"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	# test a regular flow up until successful authenticated application access
-	regular_flow "${TEST_ID}"
+	initiate_sso ${TEST_ID} ${ISSUER}
+	send_authentication_request ${TEST_ID} ${RESULT}
+	send_authentication_response ${TEST_ID} ${RESULT}
 
-	# TODO: search for successful validation using one key without a "kid"
-	find_in_logfile "${TEST_ID}" "check missing kid" 100 "blabla"
+	find_in_logfile "${TEST_ID}" "check missing kid" 25 "oidc_proto_get_key_from_jwks: search for kid \"(null)\""
+	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token signature could not be validated, aborting"
 }
 
 function rp_id_token_sig_enc() {
@@ -517,13 +553,14 @@ function rp_id_token_sig_enc() {
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
 	echo " * "
-	echo " * [server] prerequisite: .conf exists and \"id_token_encrypted_response_alg\" is set to e.g. \"A128KW\""
-	echo " * [server] prerequisite: .conf exists and \"id_token_encrypted_response_enc\" is set to e.g. \"A256CBC-HS512\""
+	echo " * [server] prerequisite: .conf exists and \"id_token_encrypted_response_alg\" is set to e.g. \"RSA1_5\""
 	echo " * "
 
 	# test a regular flow up until successful authenticated application access
 	regular_flow "${TEST_ID}"
 
+	find_in_logfile "${TEST_ID}" "check encrypted id_token" 100 "oidc_proto_parse_idtoken: enter: id_token header={\"alg\":\"RSA1_5\""
+	find_in_logfile "${TEST_ID}" "check decryption result" 100 "oidc_proto_parse_idtoken: successfully parsed (and possibly decrypted) JWT"
 }
 
 function rp_id_token_sig_none() {
@@ -545,7 +582,7 @@ function rp_id_token_sub() {
 	local TEST_ID="rp-id_token-sub"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_discovery ${TEST_ID} ${ISSUER}
+	initiate_sso ${TEST_ID} ${ISSUER}
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 	
@@ -553,23 +590,224 @@ function rp_id_token_sub() {
 	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
 }
 
-function execute_test() {
-	local TEST_ID="${1}"
+function rp_claims_request_id_token() {
+	local TEST_ID="rp-claims_request-id_token"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"scope\" is set to \"openid\""
+	echo " * [server] prerequisite: .conf exists and \"auth_request_params\" is set to e.g. \"claims=%7B%20%22id_token%22%3A%20%7B%20%22email%22%3A%20%7B%22essential%22%3A%20true%7D%20%7D%20%7D\""
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
 	
-	echo "  # ${TEST_ID}"
-	echo ""
-	eval "${TEST_ID}"
-	echo ""
+	# make sure the id_token contains the email claim
+	find_in_logfile "${TEST_ID}" "check email claim" 100 "oidc_proto_parse_idtoken: successfully parsed" "\"email\": \"diana@example.org\""
+	# check that we finished id_token validation succesfully
+	find_in_logfile "${TEST_ID}" "check valid id_token" 100 "oidc_proto_parse_idtoken: valid id_token for user"		
 }
 
-exec_init $1
+function rp_claims_request_userinfo() {
+	local TEST_ID="rp-claims_request-userinfo"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"scope\" is set to \"openid\""
+	echo " * [server] prerequisite: .conf exists and \"auth_request_params\" is set to e.g. \"claims=%7B%20%22userinfo%22%3A%20%7B%20%22email%22%3A%20%7B%22essential%22%3A%20true%7D%20%7D%20%7D\""
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# make sure the response from the userinfo endpoint contains the email claim
+	find_in_logfile "${TEST_ID}" "check email claim" 100 "oidc_util_http_call: response=" "\"email\": \"diana@example.org\""
+}
+
+function rp_scope_userinfo_claims() {
+	local TEST_ID="rp-scope-userinfo-claims"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"scope\" is set to \"openid email phone\""
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# make sure the response from the userinfo endpoint contains the email claim
+	find_in_logfile "${TEST_ID}" "check email claim" 100 "oidc_util_http_call: response=" "\"email\": \"diana@example.org\""
+	# make sure the response from the userinfo endpoint contains the phone_number claim
+	find_in_logfile "${TEST_ID}" "check phone claim" 100 "oidc_util_http_call: response=" "\"phone_number\": \"+46 90 7865000\""
+}
+
+function rp_key_rotation_op_sign_key() {
+	local TEST_ID="rp-key-rotation-op-sign-key"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# make sure we tried to use keys from cache first and missed
+	find_in_logfile "${TEST_ID}" "check JWKs cache miss" 100 "oidc_proto_get_keys_from_jwks_uri: could not find a key in the cached JSON Web Keys"
+	# and we did a forced refresh
+	find_in_logfile "${TEST_ID}" "check JWKs refresh" 100 "oidc_metadata_jwks_get: doing a forced refresh of the JWKs"
+	# then we found a match
+	find_in_logfile "${TEST_ID}" "check matching kid" 100 "oidc_proto_get_key_from_jwks: found matching kid:" "rotated_rsa"
+	# and it verified succesfully
+	find_in_logfile "${TEST_ID}" "check verification" 100 "oidc_proto_jwt_verify: JWT signature verification" "was successful"				
+}
+
+function rp_userinfo_bad_sub_claim() {
+	local TEST_ID="rp-userinfo-bad-sub-claim"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check that the sub claim did not match
+	find_in_logfile "${TEST_ID}" "check sub mismatch" 100 "oidc_proto_resolve_userinfo: \"sub\" claim" "returned from userinfo endpoint does not match the one in the id_token"
+	# check that the claims from the userinfo endpoint were discarded
+	find_in_logfile "${TEST_ID}" "check claims discarded" 100 "oidc_retrieve_claims_from_userinfo_endpoint" "failed, nothing will be stored in the session"
+}
+
+function rp_userinfo_bearer_header() {
+	local TEST_ID="rp-userinfo-bearer-header"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check userinfo endpoint access
+	find_in_logfile "${TEST_ID}" "check userinfo endpoint access" 100 "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}"
+
+	# find access token	
+	AT=`tail -n 100 ${LOG_FILE} | grep "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}/userinfo, access_token=" | cut -d"," -f3 | cut -d"=" -f2-`
+
+	# check bearer token usage in header
+	find_in_logfile "${TEST_ID}" "check bearer token" 100 "oidc_util_http_call: url=${ISSUER}/userinfo" "bearer_token=${AT}"
+}
+
+function rp_userinfo_sig() {
+	local TEST_ID="rp-userinfo-sig"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"userinfo_signed_response_alg\" is set to e.g. \"RS256\""
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check we got a signed JWT in the response from the userinfo endpoint
+	find_in_logfile "${TEST_ID}" "check JWT response" 100 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RS256\""
+		
+	# check the JWT verified successfully
+	find_in_logfile "${TEST_ID}" "check JWT verification" 100 "oidc_user_info_response_validate: successfully verified signed JWT returned from userinfo endpoint"
+}
+
+function rp_userinfo_enc() {
+	local TEST_ID="rp-userinfo-enc"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"userinfo_encrypted_response_alg\" is set to e.g. \"RSA1_5\""
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check we got a JWE in the response from the userinfo endpoint
+	find_in_logfile "${TEST_ID}" "check JWE response" 100 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RSA1_5\""
+		# check the JWE was decrypted successfully
+	find_in_logfile "${TEST_ID}" "check JWE decryption" 100 "oidc_user_info_response_validate: successfully decrypted JWE returned from userinfo endpoint"
+}
+
+
+function rp_userinfo_sig_enc() {
+	local TEST_ID="rp-userinfo-sig+enc"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"userinfo_signed_response_alg\" is set to e.g. \"RS256\""
+	echo " * [server] prerequisite: .conf exists and \"userinfo_encrypted_response_alg\" is set to e.g. \"RSA1_5\""
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check we got a JWE in the response from the userinfo endpoint
+	find_in_logfile "${TEST_ID}" "check JWE response" 100 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RSA1_5\""
+	# check the JWE was decrypted successfully
+	find_in_logfile "${TEST_ID}" "check JWE decryption" 100 "oidc_user_info_response_validate: successfully decrypted JWE returned from userinfo endpoint"
+	# check we got a signed JWT in the JWE
+	find_in_logfile "${TEST_ID}" "check JWT in JWE response" 100 "oidc_user_info_response_validate: successfully parsed JWT" "\"alg\":\"RS256\""				
+	# check the JWT verified successfully
+	find_in_logfile "${TEST_ID}" "check JWT verification" 100 "oidc_user_info_response_validate: successfully verified signed JWT returned from userinfo endpoint"
+}
+
+function rp_request_uri_sig() {
+	local TEST_ID="rp-request_uri-sig"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"request_object\" is set to e.g. \"{ \"crypto\": { \"sign_alg\": \"HS256\" } }"
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+
+	# check we created a request object that was signed with the client secret
+	find_in_logfile "${TEST_ID}" "check signed request object" 125 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\": \"HS256\""
+
+	# check we sent request URI in the authorization request
+	find_in_logfile "${TEST_ID}" "check request URI" 125 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+}
+
+function rp_request_uri_unsigned() {
+	local TEST_ID="rp-request_uri-unsigned"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"request_object\" is set to e.g. \"{ \"crypto\": { \"sign_alg\": \"none\" } }"
+	echo " * "
+	
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"	
+
+	# check we created a request object that was unsecured 
+	find_in_logfile "${TEST_ID}" "check unsigned request object" 125 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\":\"none\""
+
+	# check we sent request URI in the authorization request
+	find_in_logfile "${TEST_ID}" "check request URI" 125 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+}
+
+function execute_test() {
+	local TEST_ID="${1}"
+	local NR="${2}"
+	local TOTAL="${3}"
+	
+	echo ""
+	printf " # test [%s/%s]: %s\n" $((NR+1)) ${TOTAL} "${TEST_ID}"
+	echo ""
+	eval "${TEST_ID}"
+}
 
 if [ $1 != "all" ] ; then
-		execute_test "${1}"
+		execute_test "${1}" 0 1
 else
+	TOTAL=`echo ${TESTS} ${TESTS_ERR} ${TESTS_UNSUPPORTED} ${TESTS_TODO} | wc -w`
+	NR=0
 	for TEST_ID in $TESTS; do
-		execute_test "${TEST_ID}"
+		execute_test "${TEST_ID}" "${NR}" "${TOTAL}"
+		NR=$((NR+1))
 	done
+	echo ""
+	printf " # SUCCESS: coverage %.2f%%\n" `echo "100 * ${NR} / ${TOTAL}" | bc -l`
+	echo ""
 fi
 
 #
