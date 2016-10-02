@@ -5,6 +5,8 @@
 #
 # Script used to do automated OpenID Connect Relying Party Certification
 # Testing for the mod_auth_openidc OIDC RP implementation for Apache HTTPd.
+#
+# @Version: 2.0.1, mod_auth_openidc >= v2.0.1rc3
 # 
 # @Author: Hans Zandbelt - hzandbelt@pingidentity.com
 #
@@ -54,6 +56,7 @@ TESTS="
 	rp_key_rotation_op_sign_key
 	rp_userinfo_bad_sub_claim
 	rp_userinfo_bearer_header
+	rp_userinfo_bearer_body
 	rp_userinfo_sig
 	rp_userinfo_enc
 	rp_userinfo_sig_enc	
@@ -68,7 +71,6 @@ TESTS_ERR="
 TESTS_UNSUPPORTED="
 	rp-key-rotation-rp-sign-key
 	rp-key-rotation-rp-enc-key
-	rp-userinfo-bearer-body
 "
 
 TESTS_TODO="
@@ -688,7 +690,33 @@ function rp_userinfo_bearer_header() {
 	AT=`tail -n 100 ${LOG_FILE} | grep "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}/userinfo, access_token=" | cut -d"," -f3 | cut -d"=" -f2-`
 
 	# check bearer token usage in header
-	find_in_logfile "${TEST_ID}" "check bearer token" 100 "oidc_util_http_call: url=${ISSUER}/userinfo" "bearer_token=${AT}"
+	find_in_logfile "${TEST_ID}" "check bearer token header" 100 "oidc_util_http_call: url=${ISSUER}/userinfo" "bearer_token=${AT}"
+
+	# check valid JSON result
+	find_in_logfile "${TEST_ID}" "check valid JSON result" 100 "oidc_util_http_call: response={" "}"
+	
+	# check no error
+	find_in_logfile "${TEST_ID}" "check no error" 100 "oidc_proto_resolve_userinfo: id_token_sub=" "user_info_sub="
+}
+
+function rp_userinfo_bearer_body() {
+	local TEST_ID="rp-userinfo-bearer-body"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check userinfo endpoint access
+	find_in_logfile "${TEST_ID}" "check userinfo endpoint access" 100 "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}"
+
+	# check bearer token usage in POST body
+	find_in_logfile "${TEST_ID}" "check bearer token POST param" 100 "oidc_util_http_post_form: post" "access_token="
+	
+	# check valid JSON result
+	find_in_logfile "${TEST_ID}" "check valid JSON result" 100 "oidc_util_http_call: response={" "}"
+	
+	# check no error
+	find_in_logfile "${TEST_ID}" "check no error" 100 "oidc_proto_resolve_userinfo: id_token_sub=" "user_info_sub="
 }
 
 function rp_userinfo_sig() {
