@@ -54,4 +54,8 @@ Start a Java-based GUI to inspect the Hypersonic database used e.g. for refresh 
 
 ropc-oidc.sh
 ------------
-Script to demonstrate the alternatives for leveraging the Resource Owner Password Credentials (ROPC) grant type in an OpenID Connect fashion.
+Demonstrates alternatives for leveraging the Resource Owner Password Credentials (ROPC) grant type in an OpenID Connect fashion.
+
+token-introspection.sh
+----------------------
+Perform RFC 7662 compliant token introspection from the commandline.
