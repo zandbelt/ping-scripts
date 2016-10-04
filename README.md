@@ -51,3 +51,7 @@ Count users by analyzing the audit.log files.
 hypersonic.sh
 -------------
 Start a Java-based GUI to inspect the Hypersonic database used e.g. for refresh token storage.
+
+ropc-oidc.sh
+------------
+Script to demonstrate the alternatives for leveraging the Resource Owner Password Credentials (ROPC) grant type in an OpenID Connect fashion.
