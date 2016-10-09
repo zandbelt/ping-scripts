@@ -51,6 +51,7 @@ TESTS="
 	rp_id_token_sig_enc
 	rp_id_token_sig_none
 	rp_id_token_sub
+	rp_claims_request_id_token
 	rp_claims_request_userinfo
 	rp_scope_userinfo_claims
 	rp_key_rotation_op_sign_key
@@ -65,7 +66,6 @@ TESTS="
 "
 
 TESTS_ERR="
-	rp_claims_request_id_token
 "
 
 TESTS_UNSUPPORTED="
@@ -255,10 +255,8 @@ function rp_discovery_jwks_uri_keys() {
 	# make sure that we've validated and id_token correctly with the jwks discovered on the jwks_uri
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 	find_in_logfile "${TEST_ID}" "check id_token parse result" 100 "oidc_proto_parse_idtoken: successfully parsed" "\"iss\": \"${ISSUER}\""
-	local KID="a1"
-	find_in_logfile "${TEST_ID}" "check JWK retrieval by \"kid\"" 100 "oidc_proto_get_key_from_jwks: found matching kid: \"${KID}\""
-	local ALG="RS256"
-	find_in_logfile "${TEST_ID}" "check id_token verification" 100 "oidc_proto_jwt_verify: JWT signature verification with algorithm \"${ALG}\" was successful"
+	find_in_logfile "${TEST_ID}" "check JWK retrieval by \"kid\"" 100 "oidc_proto_get_key_from_jwks: found matching kid:"
+	find_in_logfile "${TEST_ID}" "check id_token verification" 100 "oidc_proto_jwt_verify: JWT signature verification with algorithm \"RS256\" was successful"
 }
 
 function rp_discovery_openid_configuration() {
@@ -440,10 +438,8 @@ function  rp_token_endpoint_private_key_jwt() {
 	echo " * [server] prerequisite: .conf exists and \"token_endpoint_auth\" is set to \"private_key_jwt\""
 	echo " * "
 
-	# private_key_jwt may fail token validation
-	initiate_sso ${TEST_ID} ${ISSUER}
-	send_authentication_request ${TEST_ID} ${RESULT}
-	send_authentication_response ${TEST_ID} ${RESULT}
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
 
 	# check that the token endpoint auth method is set to "private_key_jwt"
 	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=private_key_jwt"
