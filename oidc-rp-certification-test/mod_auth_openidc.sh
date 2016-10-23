@@ -63,6 +63,9 @@ TESTS="
 	rp_userinfo_sig_enc	
 	rp_request_uri_sig
 	rp_request_uri_unsigned
+	rp_request_uri_enc
+	rp_request_uri_sig_enc
+	rp_key_rotation_op_enc_key
 "
 
 TESTS_ERR="
@@ -74,9 +77,6 @@ TESTS_UNSUPPORTED="
 "
 
 TESTS_TODO="
-	rp-request_uri-enc
-	rp-request_uri-sig+enc
-	rp-key-rotation-op-enc-key
 "
 
 if [ -z $1 ] ; then
@@ -243,7 +243,7 @@ function rp_discovery_issuer_not_matching_config() {
 
 	# make sure that we've got the right error message in the error log
 	WRONG_ISSUER="https://example.com"
-	find_in_logfile "${TEST_ID}" "check issuer mismatch error message" 10 "requested issuer (${ISSUER}) does not match the \"issuer\" value in the provider metadata file: ${WRONG_ISSUER}"
+	find_in_logfile "${TEST_ID}" "check issuer mismatch error message" 15 "requested issuer (${ISSUER}) does not match the \"issuer\" value in the provider metadata file: ${WRONG_ISSUER}"
 }
 
 function rp_discovery_jwks_uri_keys() {
@@ -254,9 +254,9 @@ function rp_discovery_jwks_uri_keys() {
 
 	# make sure that we've validated and id_token correctly with the jwks discovered on the jwks_uri
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
-	find_in_logfile "${TEST_ID}" "check id_token parse result" 100 "oidc_proto_parse_idtoken: successfully parsed" "\"iss\": \"${ISSUER}\""
-	find_in_logfile "${TEST_ID}" "check JWK retrieval by \"kid\"" 100 "oidc_proto_get_key_from_jwks: found matching kid:"
-	find_in_logfile "${TEST_ID}" "check id_token verification" 100 "oidc_proto_jwt_verify: JWT signature verification with algorithm \"RS256\" was successful"
+	find_in_logfile "${TEST_ID}" "check id_token parse result" 125 "oidc_proto_parse_idtoken: successfully parsed" "\"iss\": \"${ISSUER}\""
+	find_in_logfile "${TEST_ID}" "check JWK retrieval by \"kid\"" 125 "oidc_proto_get_key_from_jwks: found matching kid:"
+	find_in_logfile "${TEST_ID}" "check id_token verification" 125 "oidc_proto_jwt_verify: JWT signature verification with algorithm \"RS256\" was successful"
 }
 
 function rp_discovery_openid_configuration() {
@@ -268,7 +268,7 @@ function rp_discovery_openid_configuration() {
 
 	# check that the registration is initiated to the discovered endpoint: ${RP_ID}/${TEST_ID}/registration"
 	# TODO: can only do this if the .provider file was cleaned up beforehand
-	#find_in_logfile "${TEST_ID}" "check registration request" 50 "oidc_util_http_get: get URL=\"${URL}\""
+	#find_in_logfile "${TEST_ID}" "check registration request" 75 "oidc_util_http_get: get URL=\"${URL}\""
 }
 
 function rp_discovery_webfinger_acct() {
@@ -283,9 +283,9 @@ function rp_discovery_webfinger_acct() {
 
 	# check that the webfinger request contains acct:"
 	URL="${RP_TEST_URL}/.well-known/webfinger?resource=acct%3A${RP_ID}.${TEST_ID}%40rp.certification.openid.net%3A8080&rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer"
-	find_in_logfile "${TEST_ID}" "check webfinger request" 50 "oidc_util_http_get: get URL=\"${URL}\""
+	find_in_logfile "${TEST_ID}" "check webfinger request" 75 "oidc_util_http_get: get URL=\"${URL}\""
 	# check that the webfinger request contains the right issuer:"
-	find_in_logfile "${TEST_ID}" "check webfinger issuer result" 50 "oidc_proto_webfinger_discovery: returning issuer \"https://rp.certification.openid.net:8080/mod_auth_openidc/rp-discovery-webfinger-acct\" for resource \"acct:${ACCT}\" after doing successful webfinger-based discovery"
+	find_in_logfile "${TEST_ID}" "check webfinger issuer result" 75 "oidc_proto_webfinger_discovery: returning issuer \"https://rp.certification.openid.net:8080/mod_auth_openidc/rp-discovery-webfinger-acct\" for resource \"acct:${ACCT}\" after doing successful webfinger-based discovery"
 }
 
 function rp_discovery_webfinger_http_href() {
@@ -300,7 +300,7 @@ function rp_discovery_webfinger_http_href() {
 	echo "${RESULT}" | grep -q "${MATCH}" && echo "OK" || { printf "ERROR:\n could not find \"%s\" in client HTML output:\n%s\n" "${MATCH}" "${RESULT}" && exit; }
 
 	# check that the module choked on the plain HTTP href value
-	find_in_logfile "${TEST_ID}" "check webfinger response" 25 "oidc_proto_webfinger_discovery: response JSON object contains an \"href\" value that is not a valid \"https\" URL"
+	find_in_logfile "${TEST_ID}" "check webfinger response" 50 "oidc_proto_webfinger_discovery: response JSON object contains an \"href\" value that is not a valid \"https\" URL"
 }
 
 function rp_discovery_webfinger_unknown_member() {
@@ -313,9 +313,9 @@ function rp_discovery_webfinger_unknown_member() {
 
 	# check that the webfinger request contains acct:
 	URL="${RP_TEST_URL}/.well-known/webfinger?resource=acct%3A${RP_ID}.${TEST_ID}%40rp.certification.openid.net%3A8080&rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer"
-	find_in_logfile "${TEST_ID}" "check webfinger request" 50 "oidc_util_http_get: get URL=\"${URL}\""
+	find_in_logfile "${TEST_ID}" "check webfinger request" 75 "oidc_util_http_get: get URL=\"${URL}\""
 	# check that the response contains \"dummy\": \"foobar\""
-	find_in_logfile "${TEST_ID}" "check webfinger response" 50 "oidc_util_http_call: response=" "\"dummy\": \"foobar\""
+	find_in_logfile "${TEST_ID}" "check webfinger response" 75 "oidc_util_http_call: response=" "\"dummy\": \"foobar\""
 }
 
 function rp_discovery_webfinger_url() {
@@ -336,9 +336,9 @@ function rp_discovery_webfinger_url() {
 
 	# check that the webfinger request contains the URL"
 	URL="${RP_TEST_URL}/.well-known/webfinger?resource=https%3A%2F%2Frp.certification.openid.net%3A8080%2F${RP_ID}%2F${TEST_ID}&rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer"
-	find_in_logfile "${TEST_ID}" "check webfinger request" 50 "oidc_util_http_get: get URL=\"${URL}\""
+	find_in_logfile "${TEST_ID}" "check webfinger request" 75 "oidc_util_http_get: get URL=\"${URL}\""
 	# check that the webfinger request contains the right issuer:"
-	find_in_logfile "${TEST_ID}" "check webfinger issuer result" 50 "oidc_proto_webfinger_discovery: returning issuer \"https://rp.certification.openid.net:8080/mod_auth_openidc/rp-discovery-webfinger-url\" for resource \"${USER_INPUT}\" after doing successful webfinger-based discovery"
+	find_in_logfile "${TEST_ID}" "check webfinger issuer result" 75 "oidc_proto_webfinger_discovery: returning issuer \"https://rp.certification.openid.net:8080/mod_auth_openidc/rp-discovery-webfinger-url\" for resource \"${USER_INPUT}\" after doing successful webfinger-based discovery"
 }
 
 function rp_registration_dynamic() {
@@ -378,14 +378,14 @@ function rp_token_endpoint_client_secret_basic() {
 	regular_flow "${TEST_ID}"
 
 	# check that the token endpoint auth method is set to "client_secret_basic"
-	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_basic"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 125 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_basic"
 
 	# check that basic_auth is set to something other than "basic_auth=(null)"
 	message "${TEST_ID}" "check basic auth" "-n"
-	tail -n 100 ${LOG_FILE} | grep "oidc_util_http_call: url=${ISSUER}/token" | grep "grant_type=authorization_code" | grep -q "basic_auth=(null)" && { echo "ERROR: basic_auth found" && exit; } || echo "OK"
+	tail -n 125 ${LOG_FILE} | grep "oidc_util_http_call: url=${ISSUER}/token" | grep "grant_type=authorization_code" | grep -q "basic_auth=(null)" && { echo "ERROR: basic_auth found" && exit; } || echo "OK"
 	
 	# check that the response from the token endpoint call is successful
-	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "
+	find_in_logfile "${TEST_ID}" "check token exchange response" 125 "oidc_util_http_call: response={" "\"id_token\": "
 }
 
 function rp_token_endpoint_client_secret_post() {
@@ -400,13 +400,13 @@ function rp_token_endpoint_client_secret_post() {
 	regular_flow "${TEST_ID}"
 
 	# check that the token endpoint auth method is set to "client_secret_post"
-	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_post"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 125 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_post"
 
 	# check that the client_secret is passed 
-	find_in_logfile "${TEST_ID}" "check post auth" 100 "oidc_util_http_call: url=${ISSUER}/token" "client_secret="
+	find_in_logfile "${TEST_ID}" "check post auth" 125 "oidc_util_http_call: url=${ISSUER}/token" "client_secret="
 
 	# check that the response from the token endpoint call is successful
-	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "
+	find_in_logfile "${TEST_ID}" "check token exchange response" 125 "oidc_util_http_call: response={" "\"id_token\": "
 }
 
 function  rp_token_endpoint_client_secret_jwt() {
@@ -421,13 +421,13 @@ function  rp_token_endpoint_client_secret_jwt() {
 	regular_flow "${TEST_ID}"
 
 	# check that the token endpoint auth method is set to "client_secret_jwt"
-	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_jwt"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 125 "oidc_proto_token_endpoint_request: token_endpoint_auth=client_secret_jwt"
 
 	# check that the client_assertion is passed 
-	find_in_logfile "${TEST_ID}" "check client assertion auth" 100 "oidc_util_http_call: url=${ISSUER}/token" "client_assertion="
+	find_in_logfile "${TEST_ID}" "check client assertion auth" 125 "oidc_util_http_call: url=${ISSUER}/token" "client_assertion="
 
 	# check that the response from the token endpoint call is successful
-	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "		
+	find_in_logfile "${TEST_ID}" "check token exchange response" 125 "oidc_util_http_call: response={" "\"id_token\": "		
 }
 
 function  rp_token_endpoint_private_key_jwt() {
@@ -442,13 +442,13 @@ function  rp_token_endpoint_private_key_jwt() {
 	regular_flow "${TEST_ID}"
 
 	# check that the token endpoint auth method is set to "private_key_jwt"
-	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 100 "oidc_proto_token_endpoint_request: token_endpoint_auth=private_key_jwt"
+	find_in_logfile "${TEST_ID}" "check token endpoint auth method" 125 "oidc_proto_token_endpoint_request: token_endpoint_auth=private_key_jwt"
 
 	# check that the client_assertion is passed 
-	find_in_logfile "${TEST_ID}" "check client assertion auth" 100 "oidc_util_http_call: url=${ISSUER}/token" "client_assertion="
+	find_in_logfile "${TEST_ID}" "check client assertion auth" 125 "oidc_util_http_call: url=${ISSUER}/token" "client_assertion="
 
 	# check that the response from the token endpoint call is successful
-	find_in_logfile "${TEST_ID}" "check token exchange response" 100 "oidc_util_http_call: response={" "\"id_token\": "
+	find_in_logfile "${TEST_ID}" "check token exchange response" 125 "oidc_util_http_call: response={" "\"id_token\": "
 }
 
 function rp_id_token_aud() {
@@ -459,7 +459,7 @@ function rp_id_token_aud() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 		
-	find_in_logfile "${TEST_ID}" "check aud mismatch" 10 "oidc_proto_validate_aud_and_azp: our configured client_id (" ") could not be found in the array of values for \"aud\" claim"
+	find_in_logfile "${TEST_ID}" "check aud mismatch" 15 "oidc_proto_validate_aud_and_azp: our configured client_id (" ") could not be found in the array of values for \"aud\" claim"
 }
 
 function rp_id_token_bad_sig_es256() {
@@ -470,8 +470,8 @@ function rp_id_token_bad_sig_es256() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
-	find_in_logfile "${TEST_ID}" "check EC id_token" 25 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"ES256\""
-	find_in_logfile "${TEST_ID}" "check EC signature mismatch" 10 "oidc_proto_jwt_verify: JWT signature verification failed" "_cjose_jws_verify_sig_ec"
+	find_in_logfile "${TEST_ID}" "check EC id_token" 30 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"ES256\""
+	find_in_logfile "${TEST_ID}" "check EC signature mismatch" 15 "oidc_proto_jwt_verify: JWT signature verification failed" "_cjose_jws_verify_sig_ec"
 }
 
 function rp_id_token_bad_sig_hs256() {
@@ -482,8 +482,8 @@ function rp_id_token_bad_sig_hs256() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
-	find_in_logfile "${TEST_ID}" "check HS id_token" 25 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"HS256\""
-	find_in_logfile "${TEST_ID}" "check HS signature mismatch" 10 "oidc_proto_jwt_verify: JWT signature verification failed" "could not verify signature against any of the (1) provided keys"
+	find_in_logfile "${TEST_ID}" "check HS id_token" 30 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"HS256\""
+	find_in_logfile "${TEST_ID}" "check HS signature mismatch" 15 "oidc_proto_jwt_verify: JWT signature verification failed" "could not verify signature against any of the (1) provided keys"
 }
 
 function rp_id_token_bad_sig_rs256() {
@@ -494,8 +494,8 @@ function rp_id_token_bad_sig_rs256() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
-	find_in_logfile "${TEST_ID}" "check RS id_token" 25 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"RS256\""
-	find_in_logfile "${TEST_ID}" "check RS signature mismatch" 10 "oidc_proto_jwt_verify: JWT signature verification failed" "_cjose_jws_verify_sig_rs"
+	find_in_logfile "${TEST_ID}" "check RS id_token" 30 "oidc_proto_parse_idtoken: successfully parsed" "\"alg\":\"RS256\""
+	find_in_logfile "${TEST_ID}" "check RS signature mismatch" 15 "oidc_proto_jwt_verify: JWT signature verification failed" "_cjose_jws_verify_sig_rs"
 }
 
 function rp_id_token_iat() {
@@ -506,8 +506,8 @@ function rp_id_token_iat() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
-	find_in_logfile "${TEST_ID}" "check missing iat" 25 "oidc_proto_validate_iat: JWT did not contain an \"iat\" number value"
-	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
+	find_in_logfile "${TEST_ID}" "check missing iat" 30 "oidc_proto_validate_iat: JWT did not contain an \"iat\" number value"
+	find_in_logfile "${TEST_ID}" "check abort" 30 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
 }
 
 function rp_id_token_issuer_mismatch() {
@@ -518,8 +518,8 @@ function rp_id_token_issuer_mismatch() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
-	find_in_logfile "${TEST_ID}" "check issuer mismatch" 25 "oidc_proto_validate_jwt: requested issuer (${ISSUER}) does not match received \"iss\" value in id_token (https://example.org/)"
-	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
+	find_in_logfile "${TEST_ID}" "check issuer mismatch" 30 "oidc_proto_validate_jwt: requested issuer (${ISSUER}) does not match received \"iss\" value in id_token (https://example.org/)"
+	find_in_logfile "${TEST_ID}" "check abort" 30 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
 }
 
 function rp_id_token_kid_absent_multiple_jwks() {
@@ -530,20 +530,23 @@ function rp_id_token_kid_absent_multiple_jwks() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 
-	find_in_logfile "${TEST_ID}" "check missing JWK" 25 "oidc_proto_jwt_verify: JWT signature verification failed" "could not verify signature against any of the"
-	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token signature could not be validated, aborting"
+	find_in_logfile "${TEST_ID}" "check missing JWK" 30 "oidc_proto_jwt_verify: JWT signature verification failed" "could not verify signature against any of the"
+	find_in_logfile "${TEST_ID}" "check abort" 30 "oidc_proto_parse_idtoken: id_token signature could not be validated, aborting"
+
+	# test a regular flow up until successful authenticated application access
+	#regular_flow "${TEST_ID}"
 }
 
 function rp_id_token_kid_absent_single_jwks() {
 	local TEST_ID="rp-id_token-kid-absent-single-jwks"
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
-	initiate_sso ${TEST_ID} ${ISSUER}
-	send_authentication_request ${TEST_ID} ${RESULT}
-	send_authentication_response ${TEST_ID} ${RESULT}
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
 
-	find_in_logfile "${TEST_ID}" "check missing kid" 25 "oidc_proto_get_key_from_jwks: search for kid \"(null)\""
-	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token signature could not be validated, aborting"
+	find_in_logfile "${TEST_ID}" "check missing kid" 150 "oidc_proto_get_key_from_jwks: search for kid \"(null)\""
+	#find_in_logfile "${TEST_ID}" "check abort" 30 "oidc_proto_parse_idtoken: id_token signature could not be validated, aborting"
+	find_in_logfile "${TEST_ID}" "check signature verification" 150 "oidc_proto_jwt_verify: JWT signature verification with algorithm \"RS256\" was successful"
 }
 
 function rp_id_token_sig_enc() {
@@ -551,14 +554,14 @@ function rp_id_token_sig_enc() {
 	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
 
 	echo " * "
-	echo " * [server] prerequisite: .conf exists and \"id_token_encrypted_response_alg\" is set to e.g. \"RSA1_5\""
+	echo " * [server] prerequisite: .conf exists and \"id_token_encrypted_response_alg\" is set to e.g. \"A128KW\""
 	echo " * "
 
 	# test a regular flow up until successful authenticated application access
 	regular_flow "${TEST_ID}"
 
-	find_in_logfile "${TEST_ID}" "check encrypted id_token" 100 "oidc_proto_parse_idtoken: enter: id_token header={\"alg\":\"RSA1_5\""
-	find_in_logfile "${TEST_ID}" "check decryption result" 100 "oidc_proto_parse_idtoken: successfully parsed (and possibly decrypted) JWT"
+	find_in_logfile "${TEST_ID}" "check encrypted id_token" 125 "oidc_proto_parse_idtoken: enter: id_token header={\"alg\":\"A128KW\""
+	find_in_logfile "${TEST_ID}" "check decryption result" 125 "oidc_proto_parse_idtoken: successfully parsed (and possibly decrypted) JWT"
 }
 
 function rp_id_token_sig_none() {
@@ -569,11 +572,11 @@ function rp_id_token_sig_none() {
 	regular_flow "${TEST_ID}"
 
 	# make sure we were using the code flow
-	find_in_logfile "${TEST_ID}" "check code flow" 100 "oidc_util_http_post_form: post data=\"grant_type=authorization_code&code="
+	find_in_logfile "${TEST_ID}" "check code flow" 125 "oidc_util_http_post_form: post data=\"grant_type=authorization_code&code="
 	# make sure the id_token has alg "none" set
-	find_in_logfile "${TEST_ID}" "check alg none" 100 "oidc_proto_parse_idtoken: successfully parsed" "JWT with header={\"alg\":\"none\"}"
+	find_in_logfile "${TEST_ID}" "check alg none" 125 "oidc_proto_parse_idtoken: successfully parsed" "JWT with header={\"alg\":\"none\"}"
 	# check that we finished id_token validation succesfully
-	find_in_logfile "${TEST_ID}" "check valid id_token" 100 "oidc_proto_parse_idtoken: valid id_token for user"
+	find_in_logfile "${TEST_ID}" "check valid id_token" 125 "oidc_proto_parse_idtoken: valid id_token for user"
 }
 
 function rp_id_token_sub() {
@@ -584,8 +587,8 @@ function rp_id_token_sub() {
 	send_authentication_request ${TEST_ID} ${RESULT}
 	send_authentication_response ${TEST_ID} ${RESULT}
 	
-	find_in_logfile "${TEST_ID}" "check missing sub" 25 "oidc_proto_validate_idtoken: id_token JSON payload did not contain the required-by-spec \"sub\" string value"
-	find_in_logfile "${TEST_ID}" "check abort" 25 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
+	find_in_logfile "${TEST_ID}" "check missing sub" 30 "oidc_proto_validate_idtoken: id_token JSON payload did not contain the required-by-spec \"sub\" string value"
+	find_in_logfile "${TEST_ID}" "check abort" 30 "oidc_proto_parse_idtoken: id_token payload could not be validated, aborting"
 }
 
 function rp_claims_request_id_token() {
@@ -601,9 +604,9 @@ function rp_claims_request_id_token() {
 	regular_flow "${TEST_ID}"
 	
 	# make sure the id_token contains the email claim
-	find_in_logfile "${TEST_ID}" "check email claim" 100 "oidc_proto_parse_idtoken: successfully parsed" "\"email\": \"diana@example.org\""
+	find_in_logfile "${TEST_ID}" "check email claim" 125 "oidc_proto_parse_idtoken: successfully parsed" "\"email\": \"diana@example.org\""
 	# check that we finished id_token validation succesfully
-	find_in_logfile "${TEST_ID}" "check valid id_token" 100 "oidc_proto_parse_idtoken: valid id_token for user"		
+	find_in_logfile "${TEST_ID}" "check valid id_token" 125 "oidc_proto_parse_idtoken: valid id_token for user"		
 }
 
 function rp_claims_request_userinfo() {
@@ -619,7 +622,7 @@ function rp_claims_request_userinfo() {
 	regular_flow "${TEST_ID}"
 	
 	# make sure the response from the userinfo endpoint contains the email claim
-	find_in_logfile "${TEST_ID}" "check email claim" 100 "oidc_util_http_call: response=" "\"email\": \"diana@example.org\""
+	find_in_logfile "${TEST_ID}" "check email claim" 125 "oidc_util_http_call: response=" "\"email\": \"diana@example.org\""
 }
 
 function rp_scope_userinfo_claims() {
@@ -634,9 +637,9 @@ function rp_scope_userinfo_claims() {
 	regular_flow "${TEST_ID}"
 	
 	# make sure the response from the userinfo endpoint contains the email claim
-	find_in_logfile "${TEST_ID}" "check email claim" 100 "oidc_util_http_call: response=" "\"email\": \"diana@example.org\""
+	find_in_logfile "${TEST_ID}" "check email claim" 125 "oidc_util_http_call: response=" "\"email\": \"diana@example.org\""
 	# make sure the response from the userinfo endpoint contains the phone_number claim
-	find_in_logfile "${TEST_ID}" "check phone claim" 100 "oidc_util_http_call: response=" "\"phone_number\": \"+46 90 7865000\""
+	find_in_logfile "${TEST_ID}" "check phone claim" 125 "oidc_util_http_call: response=" "\"phone_number\": \"+46 90 7865000\""
 }
 
 function rp_key_rotation_op_sign_key() {
@@ -650,13 +653,13 @@ function rp_key_rotation_op_sign_key() {
 	regular_flow "${TEST_ID}"
 	
 	# make sure we tried to use keys from cache first and missed
-	find_in_logfile "${TEST_ID}" "check JWKs cache miss" 100 "oidc_proto_get_keys_from_jwks_uri: could not find a key in the cached JSON Web Keys"
+	find_in_logfile "${TEST_ID}" "check JWKs cache miss" 125 "oidc_proto_get_keys_from_jwks_uri: could not find a key in the cached JSON Web Keys"
 	# and we did a forced refresh
-	find_in_logfile "${TEST_ID}" "check JWKs refresh" 100 "oidc_metadata_jwks_get: doing a forced refresh of the JWKs"
+	find_in_logfile "${TEST_ID}" "check JWKs refresh" 125 "oidc_metadata_jwks_get: doing a forced refresh of the JWKs"
 	# then we found a match
-	find_in_logfile "${TEST_ID}" "check matching kid" 100 "oidc_proto_get_key_from_jwks: found matching kid:" "rotated_rsa"
+	find_in_logfile "${TEST_ID}" "check matching kid" 125 "oidc_proto_get_key_from_jwks: found matching kid:" "rotated_rsa"
 	# and it verified succesfully
-	find_in_logfile "${TEST_ID}" "check verification" 100 "oidc_proto_jwt_verify: JWT signature verification" "was successful"				
+	find_in_logfile "${TEST_ID}" "check verification" 125 "oidc_proto_jwt_verify: JWT signature verification" "was successful"				
 }
 
 function rp_userinfo_bad_sub_claim() {
@@ -667,9 +670,9 @@ function rp_userinfo_bad_sub_claim() {
 	regular_flow "${TEST_ID}"
 	
 	# check that the sub claim did not match
-	find_in_logfile "${TEST_ID}" "check sub mismatch" 100 "oidc_proto_resolve_userinfo: \"sub\" claim" "returned from userinfo endpoint does not match the one in the id_token"
+	find_in_logfile "${TEST_ID}" "check sub mismatch" 125 "oidc_proto_resolve_userinfo: \"sub\" claim" "returned from userinfo endpoint does not match the one in the id_token"
 	# check that the claims from the userinfo endpoint were discarded
-	find_in_logfile "${TEST_ID}" "check claims discarded" 100 "oidc_retrieve_claims_from_userinfo_endpoint" "failed, nothing will be stored in the session"
+	find_in_logfile "${TEST_ID}" "check claims discarded" 125 "oidc_retrieve_claims_from_userinfo_endpoint" "failed, nothing will be stored in the session"
 }
 
 function rp_userinfo_bearer_header() {
@@ -680,19 +683,19 @@ function rp_userinfo_bearer_header() {
 	regular_flow "${TEST_ID}"
 	
 	# check userinfo endpoint access
-	find_in_logfile "${TEST_ID}" "check userinfo endpoint access" 100 "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}"
+	find_in_logfile "${TEST_ID}" "check userinfo endpoint access" 125 "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}"
 
 	# find access token	
-	AT=`tail -n 100 ${LOG_FILE} | grep "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}/userinfo, access_token=" | cut -d"," -f3 | cut -d"=" -f2-`
+	AT=`tail -n 125 ${LOG_FILE} | grep "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}/userinfo, access_token=" | cut -d"," -f3 | cut -d"=" -f2-`
 
 	# check bearer token usage in header
-	find_in_logfile "${TEST_ID}" "check bearer token header" 100 "oidc_util_http_call: url=${ISSUER}/userinfo" "bearer_token=${AT}"
+	find_in_logfile "${TEST_ID}" "check bearer token header" 125 "oidc_util_http_call: url=${ISSUER}/userinfo" "bearer_token=${AT}"
 
 	# check valid JSON result
-	find_in_logfile "${TEST_ID}" "check valid JSON result" 100 "oidc_util_http_call: response={" "}"
+	find_in_logfile "${TEST_ID}" "check valid JSON result" 125 "oidc_util_http_call: response={" "}"
 	
 	# check no error
-	find_in_logfile "${TEST_ID}" "check no error" 100 "oidc_proto_resolve_userinfo: id_token_sub=" "user_info_sub="
+	find_in_logfile "${TEST_ID}" "check no error" 125 "oidc_proto_resolve_userinfo: id_token_sub=" "user_info_sub="
 }
 
 function rp_userinfo_bearer_body() {
@@ -703,16 +706,16 @@ function rp_userinfo_bearer_body() {
 	regular_flow "${TEST_ID}"
 	
 	# check userinfo endpoint access
-	find_in_logfile "${TEST_ID}" "check userinfo endpoint access" 100 "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}"
+	find_in_logfile "${TEST_ID}" "check userinfo endpoint access" 125 "oidc_proto_resolve_userinfo: enter, endpoint=${ISSUER}"
 
 	# check bearer token usage in POST body
-	find_in_logfile "${TEST_ID}" "check bearer token POST param" 100 "oidc_util_http_post_form: post" "access_token="
+	find_in_logfile "${TEST_ID}" "check bearer token POST param" 125 "oidc_util_http_post_form: post" "access_token="
 	
 	# check valid JSON result
-	find_in_logfile "${TEST_ID}" "check valid JSON result" 100 "oidc_util_http_call: response={" "}"
+	find_in_logfile "${TEST_ID}" "check valid JSON result" 125 "oidc_util_http_call: response={" "}"
 	
 	# check no error
-	find_in_logfile "${TEST_ID}" "check no error" 100 "oidc_proto_resolve_userinfo: id_token_sub=" "user_info_sub="
+	find_in_logfile "${TEST_ID}" "check no error" 125 "oidc_proto_resolve_userinfo: id_token_sub=" "user_info_sub="
 }
 
 function rp_userinfo_sig() {
@@ -727,10 +730,10 @@ function rp_userinfo_sig() {
 	regular_flow "${TEST_ID}"
 	
 	# check we got a signed JWT in the response from the userinfo endpoint
-	find_in_logfile "${TEST_ID}" "check JWT response" 100 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RS256\""
+	find_in_logfile "${TEST_ID}" "check JWT response" 125 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RS256\""
 		
 	# check the JWT verified successfully
-	find_in_logfile "${TEST_ID}" "check JWT verification" 100 "oidc_user_info_response_validate: successfully verified signed JWT returned from userinfo endpoint"
+	find_in_logfile "${TEST_ID}" "check JWT verification" 125 "oidc_user_info_response_validate: successfully verified signed JWT returned from userinfo endpoint"
 }
 
 function rp_userinfo_enc() {
@@ -745,9 +748,9 @@ function rp_userinfo_enc() {
 	regular_flow "${TEST_ID}"
 	
 	# check we got a JWE in the response from the userinfo endpoint
-	find_in_logfile "${TEST_ID}" "check JWE response" 100 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RSA1_5\""
+	find_in_logfile "${TEST_ID}" "check JWE response" 125 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RSA1_5\""
 		# check the JWE was decrypted successfully
-	find_in_logfile "${TEST_ID}" "check JWE decryption" 100 "oidc_user_info_response_validate: successfully decrypted JWE returned from userinfo endpoint"
+	find_in_logfile "${TEST_ID}" "check JWE decryption" 125 "oidc_user_info_response_validate: successfully decrypted JWE returned from userinfo endpoint"
 }
 
 
@@ -757,20 +760,20 @@ function rp_userinfo_sig_enc() {
 
 	echo " * "
 	echo " * [server] prerequisite: .conf exists and \"userinfo_signed_response_alg\" is set to e.g. \"RS256\""
-	echo " * [server] prerequisite: .conf exists and \"userinfo_encrypted_response_alg\" is set to e.g. \"RSA1_5\""
+	echo " * [server] prerequisite: .conf exists and \"userinfo_encrypted_response_alg\" is set to e.g. \"A128KW\""
 	echo " * "
 
 	# test a regular flow up until successful authenticated application access
 	regular_flow "${TEST_ID}"
 	
 	# check we got a JWE in the response from the userinfo endpoint
-	find_in_logfile "${TEST_ID}" "check JWE response" 100 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"RSA1_5\""
+	find_in_logfile "${TEST_ID}" "check JWE response" 125 "oidc_user_info_response_validate: JWT header=" "\"alg\":\"A128KW\""
 	# check the JWE was decrypted successfully
-	find_in_logfile "${TEST_ID}" "check JWE decryption" 100 "oidc_user_info_response_validate: successfully decrypted JWE returned from userinfo endpoint"
+	find_in_logfile "${TEST_ID}" "check JWE decryption" 125 "oidc_user_info_response_validate: successfully decrypted JWE returned from userinfo endpoint"
 	# check we got a signed JWT in the JWE
-	find_in_logfile "${TEST_ID}" "check JWT in JWE response" 100 "oidc_user_info_response_validate: successfully parsed JWT" "\"alg\":\"RS256\""				
+	find_in_logfile "${TEST_ID}" "check JWT in JWE response" 125 "oidc_user_info_response_validate: successfully parsed JWT" "\"alg\":\"RS256\""				
 	# check the JWT verified successfully
-	find_in_logfile "${TEST_ID}" "check JWT verification" 100 "oidc_user_info_response_validate: successfully verified signed JWT returned from userinfo endpoint"
+	find_in_logfile "${TEST_ID}" "check JWT verification" 125 "oidc_user_info_response_validate: successfully verified signed JWT returned from userinfo endpoint"
 }
 
 function rp_request_uri_sig() {
@@ -785,10 +788,12 @@ function rp_request_uri_sig() {
 	regular_flow "${TEST_ID}"
 
 	# check we created a request object that was signed with the client secret
-	find_in_logfile "${TEST_ID}" "check signed request object" 125 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\": \"HS256\""
+	find_in_logfile "${TEST_ID}" "check signed request object" 150 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\": \"HS256\""
 
 	# check we sent request URI in the authorization request
-	find_in_logfile "${TEST_ID}" "check request URI" 125 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+	find_in_logfile "${TEST_ID}" "check request URI" 150 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+
+	# TODO: check resolving of request URI if on the same server
 }
 
 function rp_request_uri_unsigned() {
@@ -803,10 +808,97 @@ function rp_request_uri_unsigned() {
 	regular_flow "${TEST_ID}"	
 
 	# check we created a request object that was unsecured 
-	find_in_logfile "${TEST_ID}" "check unsigned request object" 125 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\":\"none\""
+	find_in_logfile "${TEST_ID}" "check unsigned request object" 150 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\":\"none\""
 
 	# check we sent request URI in the authorization request
-	find_in_logfile "${TEST_ID}" "check request URI" 125 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+	find_in_logfile "${TEST_ID}" "check request URI" 150 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+
+	# TODO: check resolving of request URI if on the same server
+}
+
+function rp_request_uri_enc() {
+	local TEST_ID="rp-request_uri-enc"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"request_object\" is set to e.g. \"{ \"crypto\": { \"crypt_alg\": \"A128KW\" } }"
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check we created a request object that was encrypted 
+	find_in_logfile "${TEST_ID}" "check encrypted request object" 150 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\": \"A128KW\""
+
+	# check we sent request URI in the authorization request
+	find_in_logfile "${TEST_ID}" "check request URI" 150 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+
+	# TODO: check resolving of request URI if on the same server
+}
+
+function rp_request_uri_sig_enc() {
+	local TEST_ID="rp-request_uri-sig+enc"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"request_object\" is set to e.g. \"{ \"crypto\": { \"sign_alg\": \"RS256\", \"crypt_alg\": \"A128KW\" } }"
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"	
+
+	# check we created a request object that was encrypted 
+	find_in_logfile "${TEST_ID}" "check encrypted request object" 150 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\": \"RSA1_5\""
+
+	# check we sent request URI in the authorization request
+	find_in_logfile "${TEST_ID}" "check request URI" 150 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+				
+	# TODO: check resolving of request URI if on the same server
+}
+
+function rp_key_rotation_op_enc_key() {
+	local TEST_ID="rp-key-rotation-op-enc-key"
+	local ISSUER="${RP_TEST_URL}/${RP_ID}/${TEST_ID}"
+	
+	echo " * "
+	echo " * [server] prerequisite: .conf exists and \"request_object\" is set to e.g. \"{ \"crypto\": { \"crypt_alg\": \"RSA1_5\" } }"
+	echo " * "
+
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check we created a request object that was encrypted 
+	find_in_logfile "${TEST_ID}" "check encrypted request object" 150 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\": \"RSA1_5\""
+
+	# check we sent request URI in the authorization request
+	find_in_logfile "${TEST_ID}" "check request URI" 150 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+
+	# check that we refreshed keys
+	find_in_logfile "${TEST_ID}" "check JWKS refresh" 150 "oidc_metadata_jwks_get: doing a forced refresh of the JWKs from URI"
+	
+	# get the kid we used for encryption
+	KIDA=`tail -n 150 ${LOG_FILE} | grep  "oidc_proto_create_request_uri: serialized request object JWT header" | cut -d{ -f2 | cut -d: -f4 | cut -d"\"" -f2`
+	message "${TEST_ID}" "kid #1 ${KIDA}"
+		
+	# test a regular flow up until successful authenticated application access
+	regular_flow "${TEST_ID}"
+	
+	# check we created a request object that was encrypted 
+	find_in_logfile "${TEST_ID}" "check encrypted request object" 150 "oidc_proto_create_request_uri: serialized request object JWT header" "\"alg\": \"RSA1_5\""
+
+	# check we sent request URI in the authorization request
+	find_in_logfile "${TEST_ID}" "check request URI" 150 "oidc_proto_authorization_request: adding outgoing header" "&request_uri="
+
+	# check that we refreshed keys
+	find_in_logfile "${TEST_ID}" "check JWKS refresh" 150 "oidc_metadata_jwks_get: doing a forced refresh of the JWKs from URI"
+	
+	# get the kid we used for encryption
+	KIDB=`tail -n 150 ${LOG_FILE} | grep  "oidc_proto_create_request_uri: serialized request object JWT header" | cut -d{ -f2 | cut -d: -f4 | cut -d"\"" -f2`
+	message "${TEST_ID}" "kid #2 ${KIDB}"
+				
+	# check that the kid's from the two tests differ
+	message "${TEST_ID}" "check different kids" "-n"
+	if [ "${KIDA}" != "${KIDB}" ] ; then echo "OK"; else echo "ERROR" && exit; fi
 }
 
 function execute_test() {
@@ -823,7 +915,7 @@ function execute_test() {
 if [ $1 != "all" ] ; then
 		execute_test "${1}" 0 1
 else
-	TOTAL=`echo ${TESTS} ${TESTS_ERR} ${TESTS_UNSUPPORTED} ${TESTS_TODO} | wc -w`
+	TOTAL=`echo ${TESTS} ${TESTS_ERR} ${TESTS_TODO} | wc -w`
 	NR=0
 	for TEST_ID in $TESTS; do
 		execute_test "${TEST_ID}" "${NR}" "${TOTAL}"
