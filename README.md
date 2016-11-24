@@ -24,6 +24,13 @@ Scripts that use the Admin REST API that PingFederate provides since version 7.x
 - connection-update-virtual-server-id.sh  
   add a virtual server ID to an existing SP Connection
 
+pingaccess-admin-api
+-----------------
+Scripts that use the PingAccess Admin REST API.
+
+- pa-version.sh  
+  access the PingAccess Admin API with an OAuth 2.0 Client
+
 pingone-directory
 -----------------
 Scripts that use the SCIM API provided to the PingOne directory.
