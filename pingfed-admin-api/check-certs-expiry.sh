@@ -12,17 +12,22 @@ pf_check_expiry() {
   local ENDPOINT="$1"
   local DAYS="$2"
   if [ -z "${DAYS}" ] ; then DAYS=30; fi
-  echo ${FLAGS} | xargs curl ${PF_API}/${ENDPOINT} | jq '.items[] | .entityId as $entityid | .credentials.certs[] | [$entityid, .x509File.fileData] | join("|")' |
-    while IFS="|" read -r entityid cert ; do
+  echo ${FLAGS} | xargs curl ${PF_API}/${ENDPOINT} | jq '.items[] | .entityId as $entityid | .credentials.certs[] | [$entityid, (.primaryVerificationCert|tostring), (.secondaryVerificationCert|tostring), .x509File.fileData] | join("|")' |
+    while IFS="|" read -r entityid primary secondary cert ; do
       entityid=$(echo "$entityid" | tr -d '"')
       cert=$(echo "$cert" | tr -d '"')
       #echo "entityid = *${entityid}*"
+      #echo "primary = *${primary}*"
+      #echo "secondary = *${secondary}*"
       #echo "cert = *${cert}*"
+      type="Unused"
+      if [ "$secondary" == "true" ] ; then type="Secondary"; fi
+      if [ "$primary" == "true" ] ; then type="Primary"; fi
       enddate=$(echo -e "$cert" | openssl x509 -checkend $(( 86400 * DAYS )) -enddate)
       if [[ $enddate =~ (.*)Certificate\ will\ expire ]]; then
-        echo "Verification certificate for \"$entityid\" has expired or will do so within the next $DAYS day(s)!"
+        echo "$type verification certificate for \"$entityid\" has expired or will do so within the next $DAYS day(s)!"
       else
-        echo "Verification certificate for \"$entityid\" is good for another $DAYS day(s)."
+        echo "$type verification certificate for \"$entityid\" is good for another $DAYS day(s)."
       fi
     done
 }
