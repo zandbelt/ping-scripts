@@ -16,7 +16,7 @@ case $1 in
 		fi
 		echo ${FLAGS} | xargs curl ${PF_API}/sp/idpConnections | jq '.items[] | .entityId as $entityid | .credentials.certs[] | [$entityid, .x509File.fileData] | join("|")' |
 		  while IFS="|" read -r entityid cert ; do
-		    id=$(echo $id | tr -d '"')
+		    entityid=$(echo $entityid | tr -d '"')
 		    cert=$(echo $cert | tr -d '"')
 		    enddate=$(echo "$cert" | openssl x509 -checkend $(( 86400 * DAYS )) -enddate)
 		    if [[ $enddate =~ (.*)Certificate\ will\ expire ]]; then
