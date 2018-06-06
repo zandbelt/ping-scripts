@@ -23,6 +23,8 @@ Scripts that use the Admin REST API that PingFederate provides since version 7.x
   backup/restore from the commandline
 - connection-update-virtual-server-id.sh  
   add a virtual server ID to an existing SP Connection
+- rotate-key-at-enc-sym.sh  
+  rotate a symmetric encryption key for a JWT access token
 
 pingaccess-admin-api
 -----------------
