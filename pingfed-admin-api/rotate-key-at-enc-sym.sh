@@ -7,18 +7,20 @@
 #
 # Rotate symmetric encryption key in a token manager instance
 #
+# NB: one should align the token lifetime with the frequency that this script runs
 
 # PREREQS:
 # - system utilities: bash curl jq openssl
-# - KEY_ID_ONE and KEY_ID_TWO are two existing keys for the token manager instance TOKEN_MANAGER_ID
-#
+# - TOKEN_MANAGER_ID is an existing JWT token manager instance and a suitable encryption key + algorithm was already configured, seel also KEY_SIZE
 
-KEY_ID_ONE="rot1"
-KEY_ID_TWO="rot2"
 TOKEN_MANAGER_ID="jwt"
 
 PF_HOST_PORT="localhost:9999"
 PF_CREDS="administrator:2Federate"
+
+# names of the rotating keys
+KEY_ID_ONE="rot1"
+KEY_ID_TWO="rot2"
 
 # for 256 bit algorithms like AES-CBC-128 HMAC-SHA-256
 KEY_SIZE="32"
