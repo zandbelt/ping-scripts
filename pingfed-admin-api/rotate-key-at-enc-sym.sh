@@ -46,9 +46,20 @@ KEY_ID=`[[ "${KEY_ID_CUR}" == "${KEY_ID_ONE}" ]] && echo "${KEY_ID_TWO}" || echo
 
 function make_sure_key_exists() {
 	local KID="$1"
-	if ! jq -e ".configuration.tables | (map(select(.name==\"Symmetric Keys\") | (.rows | map(.fields | (map(select(.name == \"Key ID\" and .value == \"${KID}\"))))))) | flatten | any" <(echo ${CUR_DATA}) >/dev/null ; then
+	if ! jq -e ".configuration.tables | \
+					(map(select(.name==\"Symmetric Keys\") | \
+						(.rows | map(.fields | \
+							(map(select(.name == \"Key ID\" and .value == \"${KID}\"))) \
+					)))) | flatten | any" <(echo ${CUR_DATA}) >/dev/null ; then
 		#echo "create new key: ${KID}"
-		DATA=$(jq ".configuration.tables |= (map(select(.name==\"Symmetric Keys\") |= (.rows |= . + [ { \"fields\":  [ { \"name\": \"Key ID\", \"value\": \"${KID}\" }, { \"name\": \"Key\", \"value\": \"\" } ] } ] )))" <(echo ${CUR_DATA}))
+		DATA=$(jq ".configuration.tables |= \
+						(map(select(.name==\"Symmetric Keys\") |= \
+							(.rows |= . + \
+								[ { \"fields\":  [ \
+									{ \"name\": \"Key ID\", \"value\": \"${KID}\" }, \
+									{ \"name\": \"Key\", \"value\": \"\" } \
+								] } ] \
+						)))" <(echo ${CUR_DATA}))
 	else
 		#echo "existing key: ${KID}"
 		DATA="${CUR_DATA}"
@@ -60,13 +71,28 @@ make_sure_key_exists "${KEY_ID}"
 
 # update (new or existing) key with new random value
 KVAL=$(openssl rand -hex ${KEY_SIZE})
-UPD_DATA=`jq ".configuration.tables |= (map(select(.name==\"Symmetric Keys\") |= (.rows |= map( if any(.fields[]; .name==\"Key ID\" and .value==\"${KEY_ID}\") then .fields |= map(if .name == \"Key\" then .value = \"${KVAL}\" | del(.encryptedValue) else . end) else . end ))))" <(echo ${CUR_DATA})`
+UPD_DATA=`jq ".configuration.tables |= \
+				(map(select(.name==\"Symmetric Keys\") |= \
+					(.rows |= map( if any(.fields[]; .name==\"Key ID\" and .value==\"${KEY_ID}\") then \
+						.fields |= map(if .name == \"Key\" then \
+							.value = \"${KVAL}\" | del(.encryptedValue) \
+						else . end) \
+					else . end ) \
+					) \
+				))" <(echo ${CUR_DATA})`
 
 # update JWE Algorithm and JWE Content Encryption Algorithm
-UPD_DATA=`jq ".configuration.fields |= (map(select(.name==\"JWE Algorithm\") |= (.value=\"${JWE_ALG}\"))) | (.configuration.fields |= map(select(.name==\"JWE Content Encryption Algorithm\") |= (.value=\"${JWE_CEA}\"))) " <(echo ${UPD_DATA})`
+UPD_DATA=`jq ".configuration.fields |= \
+				(map(select(.name==\"JWE Algorithm\") |= (.value=\"${JWE_ALG}\"))) | (.configuration.fields |= \
+					map(select(.name==\"JWE Content Encryption Algorithm\") |= \
+						(.value=\"${JWE_CEA}\")) \
+				) " <(echo ${UPD_DATA})`
 
 # update active key
-UPD_DATA=`jq ".configuration.fields |= (map(select(.name==\"Active Symmetric Encryption Key ID\") |= (.value=\"${KEY_ID}\"))) " <(echo ${UPD_DATA})`
+UPD_DATA=`jq ".configuration.fields |= \
+				(map(select(.name==\"Active Symmetric Encryption Key ID\") |= \
+					(.value=\"${KEY_ID}\") \
+				)) " <(echo ${UPD_DATA})`
 
 # push the new token manager configuration to PingFederate
 NEW_DATA=`echo "${CURL_FLAGS}" | xargs curl -X PUT -d "${UPD_DATA}" "${API_URL}/${TOKEN_MANAGER_ID}"` || exit -1
