@@ -25,8 +25,6 @@ Scripts that use the Admin REST API that PingFederate provides since version 7.x
   add a virtual server ID to an existing SP Connection
 - rotate-key-at-enc-sym.sh  
   rotate a symmetric encryption key for a JWT access token
-- client-credentials.sh
-  demonstrate the client credentials flow from the commandline using cURL
 
 pingaccess-admin-api
 -----------------
@@ -70,3 +68,7 @@ Demonstrates alternatives for leveraging the Resource Owner Password Credentials
 token-introspection.sh
 ----------------------
 Perform RFC 7662 compliant token introspection from the commandline.
+
+client-credentials.sh
+---------------------
+Demonstrate the client credentials flow from the commandline using cURL.
