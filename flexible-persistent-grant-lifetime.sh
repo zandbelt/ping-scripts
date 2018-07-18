@@ -21,6 +21,21 @@ PF_CREDS="administrator:2Federate"
 # should not need to modify below 
 #
 
+# default persistent grant lifetime in minutes
+# 90 days
+LIFETIME_DEFAULT=`expr 90 \* 24 \* 60`
+#LIFETIME_DEFAULT=300
+
+# special persistent grant lifetime in minutes for requests that contain a special scope 
+# 1 year
+LIFETIME_SPECIAL=`expr 365 \* 24 \* 60`
+#LIFETIME_SPECIAL=600
+
+# scopes requested resulting in default lifetime
+SCOPES_DEFAULT="admin"
+# scope requested resulting in special lifetime
+SCOPE_SPECIAL="edit"
+
 PF_HOST_PORT="${PF_HOST}:${PF_PORT_ADMIN}"
 CURL_FLAGS="-s -S -k -H \"X-XSRF-Header: pingfed\" -H \"Content-Type: application/json\" -u \"${PF_CREDS}\""
 API_URL="https://${PF_HOST_PORT}/pf-admin-api/v1"
@@ -63,7 +78,11 @@ function playground_setup() {
   # for other request parameters access:
   # #this.get("context.HttpRequest").getObjectValue() is an instance of javax.servlet.http.HttpServletRequest 
   CUR_DATA=`echo "${CURL_FLAGS}" | xargs curl "${API_URL}/oauth/resourceOwnerCredentialsMappings/${MAPPING_ID}"` || exit -1
-  UPD_DATA=`jq '.attributeContractFulfillment += { "PERSISTENT_GRANT_LIFETIME": { "source": { "type": "EXPRESSION" }, "value": "#this.get(\"context.OAuthScopes\") != NULL && #this.get(\"context.OAuthScopes\").hasValue(\"edit\") ? 300 : 600" } }' <(echo ${CUR_DATA})`
+  UPD_DATA=`jq ".attributeContractFulfillment += { \
+\"PERSISTENT_GRANT_LIFETIME\": { \
+  \"source\": { \"type\": \"EXPRESSION\" }, \
+  \"value\": \"#this.get(\\\\\"context.OAuthScopes\\\\\") != NULL && #this.get(\\\\\"context.OAuthScopes\\\\\").hasValue(\\\\\"${SCOPE_SPECIAL}\\\\\") ? ${LIFETIME_SPECIAL} : ${LIFETIME_DEFAULT}\" } \
+}" <(echo ${CUR_DATA})`
   NEW_DATA=`echo "${CURL_FLAGS}" | xargs curl -X PUT -d "${UPD_DATA}" "${API_URL}/oauth/resourceOwnerCredentialsMappings/${MAPPING_ID}"` || exit -1
 
   jq '.' <(echo ${NEW_DATA})
@@ -83,7 +102,7 @@ case $1 in
 	 	jq '.' <(echo ${CUR_DATA})
 	    ;;
 	run)
-		${0} setup >/dev/null && ${0} request phone > /dev/null && ${0} request "phone edit" >/dev/null && ${0} grants
+		${0} setup >/dev/null && ${0} request "${SCOPES_DEFAULT}" > /dev/null && ${0} request "${SCOPES_DEFAULT} ${SCOPE_SPECIAL}" >/dev/null && ${0} grants
 		;;
 	*)
 		echo "Usage: $0 setup | request <scopes> | grants | run"
