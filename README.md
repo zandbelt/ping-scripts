@@ -72,3 +72,7 @@ Perform RFC 7662 compliant token introspection from the commandline.
 client-credentials.sh
 ---------------------
 Demonstrate the client credentials flow from the commandline using cURL.
+
+flexible-persistent-grant-lifetime.sh
+-------------------------------------
+Demonstrates setting the lifetime of persistent grants based on context of the authorization request (scopes).
