@@ -73,6 +73,10 @@ client-credentials.sh
 ---------------------
 Demonstrate the client credentials flow from the commandline using cURL.
 
+refresh-token.sh
+---------------------
+Demonstrate the refresh token grant type (after initial ROPC) from the commandline using cURL.
+
 flexible-persistent-grant-lifetime.sh
 -------------------------------------
 Demonstrates setting the lifetime of persistent grants based on context of the authorization request (scopes).
