@@ -65,6 +65,10 @@ ropc-oidc.sh
 ------------
 Demonstrates alternatives for leveraging the Resource Owner Password Credentials (ROPC) grant type in an OpenID Connect fashion.
 
+authorization-code.sh
+---------------------
+Demonstrate the authorization code flow from the commandline using cURL.
+
 token-introspection.sh
 ----------------------
 Perform RFC 7662 compliant token introspection from the commandline.
