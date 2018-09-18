@@ -58,6 +58,6 @@ HEADERS=$(echo "${FLAGS} ${SCOPES_FORM_POST}" | xargs curl -D - -o /dev/null -d 
 CODE=$(echo "${HEADERS}" | grep "Location:" | cut -d"=" -f2 | cut -d"&" -f1)
 #echo "code: ${CODE}" 
 
-TOKEN_RESPONSE=$(curl -s -k -d "grant_type=authorization_code" -d "client_id=${CLIENT_ID}" -d "redirect_uri=${REDIRECT_URI}" -d "client_secret=${CLIENT_SECRET}" -d "state=${STATE}" -d "code=${CODE}" "${TOKEN_ENDPOINT}")
+TOKEN_RESPONSE=$(echo "${FLAGS}" | xargs curl -d "grant_type=authorization_code" -d "client_id=${CLIENT_ID}" -d "redirect_uri=${REDIRECT_URI}" -d "client_secret=${CLIENT_SECRET}" -d "state=${STATE}" -d "code=${CODE}" "${TOKEN_ENDPOINT}")
 echo "${TOKEN_RESPONSE}" | jq '.'
 
