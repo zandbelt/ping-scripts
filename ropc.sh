@@ -11,9 +11,11 @@
 PF_HOST_PORT="localhost:9031"
 PF_CREDS="administrator:2Federate"
 
-# credentials for client credentials grant
-CC_CLIENT_ID="cc_secret_client"
-CC_CLIENT_SECRET="2Federate"
+# credentials for resource owner password credentials grant
+RO_CLIENT_ID="ro_client"
+
+USERNAME="joe"
+PASSWORD="2Federate"
 
 #SCOPES="openid admin edit"
 
@@ -27,9 +29,10 @@ if [ ! -z "${SCOPES}" ] ; then
   SCOPES_POST="-d scope=\"${SCOPES}\""
 fi
 
+
 case $1 in
 	request)
-		echo "${CURL_FLAGS} ${SCOPES_POST}" | xargs curl -u "${CC_CLIENT_ID}:${CC_CLIENT_SECRET}" -d "grant_type=client_credentials" "https://${PF_HOST_PORT}/as/token.oauth2" | jq '.'
+		echo "${CURL_FLAGS} ${SCOPES_POST}" | xargs curl -d "client_id=${RO_CLIENT_ID}" -d "grant_type=password" -d "username=${USERNAME}" -d "password=${PASSWORD}" "https://${PF_HOST_PORT}/as/token.oauth2" | jq '.'	
 		;;
 	introspect)
 		if [  -z "$2" ] ; then echo "Usage $0 introspect <token" ; exit ; fi

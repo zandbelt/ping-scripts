@@ -61,9 +61,9 @@ hypersonic.sh
 -------------
 Start a Java-based GUI to inspect the Hypersonic database used e.g. for refresh token storage.
 
-ropc-oidc.sh
+ropc.sh
 ------------
-Demonstrates alternatives for leveraging the Resource Owner Password Credentials (ROPC) grant type in an OpenID Connect fashion.
+Demonstrates the Resource Owner Password Credentials (ROPC) grant type from the commandline using cURL.
 
 authorization-code.sh
 ---------------------
@@ -71,7 +71,7 @@ Demonstrate the authorization code flow from the commandline using cURL.
 
 token-introspection.sh
 ----------------------
-Perform RFC 7662 compliant token introspection from the commandline.
+Perform RFC 7662 compliant token introspection from the commandline using cURL.
 
 client-credentials.sh
 ---------------------
@@ -80,6 +80,10 @@ Demonstrate the client credentials flow from the commandline using cURL.
 refresh-token.sh
 ---------------------
 Demonstrate the refresh token grant type (after initial ROPC) from the commandline using cURL.
+
+ropc-oidc.sh
+------------
+Demonstrates alternatives for leveraging the Resource Owner Password Credentials (ROPC) grant type in an OpenID Connect fashion.
 
 flexible-persistent-grant-lifetime.sh
 -------------------------------------
