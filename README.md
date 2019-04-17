@@ -25,6 +25,8 @@ Scripts that use the Admin REST API that PingFederate provides since version 7.x
   add a virtual server ID to an existing SP Connection
 - rotate-key-at-enc-sym.sh  
   rotate a symmetric encryption key for a JWT access token
+- sp-connection-add-verification-cert.sh
+  add a verification certificate to a SP connection
 
 pingaccess-admin-api
 -----------------
